@@ -1,0 +1,2279 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTB Trails & Spots</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-green: #2d5016;
+            --secondary-green: #4a7c2c;
+            --accent-orange: #d97316;
+            --earth-brown: #6b4423;
+            --light-beige: #f4f1ea;
+            --dark-gray: #2c2c2c;
+            --white: #ffffff;
+            --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
+            --shadow-md: 0 4px 8px rgba(0,0,0,0.15);
+            --shadow-lg: 0 8px 16px rgba(0,0,0,0.2);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light-beige);
+            color: var(--dark-gray);
+            line-height: 1.6;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* GRID LAYOUT */
+        .parent {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: 60px 60px 1fr;
+            gap: 8px;
+            height: 100vh;
+            padding: 8px;
+        }
+
+        /* DIV1 - Logo/Name */
+        .div1 {
+            grid-column: span 2;
+            background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
+            color: var(--white);
+            box-shadow: var(--shadow-md);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .logo-icon {
+            font-size: 2rem;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        /* DIV2, DIV3, DIV4 - Navigation */
+        .div2, .div3, .div4 {
+            background-color: var(--white);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-sm);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            color: var(--primary-green);
+            position: relative;
+        }
+
+        .div2:hover, .div3:hover, .div4:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            background-color: var(--light-beige);
+        }
+
+        .admin-dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background-color: var(--white);
+            min-width: 200px;
+            box-shadow: var(--shadow-lg);
+            border-radius: 8px;
+            margin-top: 8px;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .div4:hover .admin-dropdown-content {
+            display: block;
+        }
+
+        .dropdown-item {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background-color: var(--light-beige);
+        }
+
+        /* DIV5 - Suchleiste */
+        .div5 {
+            grid-column: span 5;
+            grid-row-start: 2;
+            background-color: var(--white);
+            border-radius: 8px;
+            padding: 0 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .search-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .search-icon {
+            font-size: 1.3rem;
+            color: var(--secondary-green);
+        }
+
+        .search-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 1rem;
+            padding: 0.5rem;
+            background: transparent;
+        }
+
+        .instruction-text {
+            color: var(--earth-brown);
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        /* DIV6 - Karte */
+        .div6 {
+            grid-column: span 3;
+            grid-row-start: 3;
+            background-color: var(--white);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .map-layer-control {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 1000;
+            background-color: var(--white);
+            border-radius: 8px;
+            box-shadow: var(--shadow-md);
+            padding: 0.5rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .layer-btn {
+            background-color: var(--light-beige);
+            border: 2px solid transparent;
+            padding: 0.5rem 0.8rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: var(--dark-gray);
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .layer-btn:hover {
+            background-color: #e8e4db;
+            transform: translateY(-2px);
+        }
+
+        .layer-btn.active {
+            background-color: var(--secondary-green);
+            color: var(--white);
+            border-color: var(--primary-green);
+        }
+
+        /* Maßstab Styling */
+        .leaflet-control-scale {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .leaflet-control-scale-line {
+            border: 2px solid var(--primary-green);
+            border-top: none;
+            background-color: rgba(255, 255, 255, 0.9);
+            color: var(--dark-gray);
+            padding: 2px 5px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Route Info Box auf Karte */
+        .route-info-overlay {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.98);
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+            min-width: 350px;
+            border: 3px solid var(--secondary-green);
+        }
+
+        .route-info-overlay h3 {
+            color: var(--primary-green);
+            margin-bottom: 0.8rem;
+            font-size: 1.3rem;
+        }
+
+        .route-info-overlay p {
+            margin: 0.5rem 0;
+            color: var(--dark-gray);
+            font-size: 0.95rem;
+        }
+
+        .route-point-count {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent-orange);
+            margin: 1rem 0;
+            padding: 0.5rem;
+            background-color: var(--light-beige);
+            border-radius: 8px;
+        }
+
+        .route-overlay-buttons {
+            display: flex;
+            gap: 0.8rem;
+            margin-top: 1rem;
+        }
+
+        .route-overlay-buttons .btn {
+            flex: 1;
+            margin: 0;
+        }
+
+        /* Group Info Badge */
+        .group-info-badge {
+            background-color: var(--accent-orange);
+            color: white;
+            padding: 0.8rem 1.2rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        /* MARKER TYPE SELECTION MODAL */
+        .type-selection-modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1500;
+            background-color: var(--white);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            min-width: 400px;
+            max-width: 500px;
+            border: 3px solid var(--secondary-green);
+        }
+
+        .type-selection-modal.active {
+            display: block;
+        }
+
+        .type-selection-modal h3 {
+            color: var(--primary-green);
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-size: 1.3rem;
+        }
+
+        .type-selection-modal .instruction {
+            text-align: center;
+            color: #666;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+        }
+
+        .type-buttons-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.8rem;
+            margin-bottom: 1rem;
+        }
+
+        .type-btn {
+            padding: 1rem;
+            border: 2px solid var(--light-beige);
+            border-radius: 8px;
+            background-color: var(--white);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-align: center;
+            color: var(--dark-gray);
+        }
+
+        .type-btn:hover {
+            background-color: var(--light-beige);
+            border-color: var(--secondary-green);
+            transform: translateY(-2px);
+        }
+
+        .type-modal-cancel {
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .div7 {
+            grid-column-start: 4;
+            grid-column: span 2;
+            grid-row-start: 3;
+            background-color: var(--white);
+            border-radius: 8px;
+            padding: 1.5rem;
+            overflow-y: auto;
+            box-shadow: var(--shadow-md);
+        }
+
+        .sidebar-section {
+            margin-bottom: 2rem;
+        }
+
+        .sidebar-section h3 {
+            color: var(--primary-green);
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            border-bottom: 2px solid var(--light-beige);
+            padding-bottom: 0.5rem;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.8rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: var(--secondary-green);
+            color: var(--white);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-green);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background-color: var(--accent-orange);
+            color: var(--white);
+        }
+
+        .btn-secondary:hover {
+            background-color: #c2640f;
+            transform: translateY(-2px);
+        }
+
+        .btn-cancel {
+            background-color: #999;
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            background-color: #777;
+        }
+
+        .marker-list-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .marker-item {
+            background-color: var(--light-beige);
+            padding: 1rem;
+            margin-bottom: 0.8rem;
+            border-radius: 5px;
+            border-left: 4px solid var(--secondary-green);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .marker-item:hover {
+            transform: translateX(5px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .marker-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .marker-item-title {
+            font-weight: 600;
+            color: var(--primary-green);
+        }
+
+        .marker-item-type {
+            font-size: 1.2rem;
+        }
+
+        .marker-item-coords {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .marker-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .show-on-map-btn {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.3rem 0.8rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            flex: 1;
+        }
+
+        .show-on-map-btn:hover {
+            background-color: #2563eb;
+        }
+
+        .delete-marker-btn {
+            background-color: #dc2626;
+            color: white;
+            border: none;
+            padding: 0.3rem 0.8rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            flex: 1;
+        }
+
+        .delete-marker-btn:hover {
+            display: inline-block;
+            background-color: var(--accent-orange);
+            color: white;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-top: 0.3rem;
+        }
+
+        .delete-marker-btn {
+            background-color: #dc2626;
+            color: white;
+            border: none;
+            padding: 0.3rem 0.8rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        .delete-marker-btn:hover {
+            background-color: #b91c1c;
+        }
+
+        .marker-group-badge {
+            display: inline-block;
+            background-color: var(--accent-orange);
+            color: white;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-top: 0.3rem;
+        }
+
+        /* Gruppen-Item in Modal */
+        .group-item-card {
+            background-color: var(--light-beige);
+            padding: 1rem;
+            margin-bottom: 0.8rem;
+            border-radius: 8px;
+            border-left: 4px solid var(--secondary-green);
+        }
+
+        .group-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .group-item-title {
+            font-weight: 600;
+            color: var(--primary-green);
+            font-size: 1rem;
+        }
+
+        .group-item-icon {
+            font-size: 1.5rem;
+        }
+
+        .group-item-type {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 0.3rem;
+        }
+
+        .group-item-coords {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        /* Aktive Gruppe Anzeige */
+        .active-group-info {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #e0f2e9;
+            border-radius: 8px;
+            border-left: 4px solid var(--secondary-green);
+        }
+
+        .active-group-info p {
+            margin-bottom: 0.5rem;
+        }
+
+        .active-group-info .group-title {
+            font-weight: 600;
+            color: var(--primary-green);
+        }
+
+        .active-group-info .group-count {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 0.8rem;
+        }
+
+        /* MODAL */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: var(--white);
+            padding: 2.5rem;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .modal-content.minimized {
+            max-width: 300px;
+            padding: 1.5rem;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            max-height: 200px;
+            z-index: 2001;
+        }
+
+        .modal-content.minimized h2 {
+            font-size: 1rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .modal-content.minimized .form-group,
+        .modal-content.minimized .sidebar-section,
+        .modal-content.minimized #groupItemsList {
+            display: none;
+        }
+
+        .modal-content.minimized .form-buttons {
+            margin-top: 0.5rem;
+        }
+
+        .modal-content.minimized .btn {
+            padding: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .minimize-toggle-btn {
+            position: absolute;
+            top: 1rem;
+            right: 3.5rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #999;
+            transition: color 0.3s;
+        }
+
+        .minimize-toggle-btn:hover {
+            color: var(--dark-gray);
+        }
+
+        .modal-close {
+            position: absolute;
+            right: 1.5rem;
+            top: 1.5rem;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #999;
+            cursor: pointer;
+        }
+
+        .modal-close:hover {
+            color: var(--dark-gray);
+        }
+
+        .modal-content h2 {
+            color: var(--primary-green);
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--dark-gray);
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.8rem;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--secondary-green);
+        }
+
+        .form-group textarea {
+            resize: none;
+            overflow: hidden;
+            min-height: 60px;
+            max-height: 300px;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .form-buttons .btn {
+            flex: 1;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 1200px) {
+            .parent {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto 400px 1fr;
+                gap: 8px;
+            }
+
+            .div1, .div2, .div3, .div4, .div5, .div6, .div7 {
+                grid-column: 1 !important;
+                grid-row: auto !important;
+            }
+
+            .logo-text {
+                font-size: 1.2rem;
+            }
+
+            .map-layer-control {
+                flex-wrap: wrap;
+            }
+
+            .instruction-text {
+                display: none;
+            }
+
+            .route-info-overlay {
+                min-width: 300px;
+                padding: 1rem 1.5rem;
+            }
+
+            .type-selection-modal {
+                min-width: 300px;
+                max-width: 90%;
+            }
+
+            .type-buttons-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="parent">
+        <!-- DIV1 - Logo/Name -->
+        <div class="div1">
+            <div class="logo">
+                <span class="logo-icon">🚵</span>
+                <span class="logo-text">MTB Trails</span>
+            </div>
+        </div>
+
+        <!-- DIV2 - Strecken -->
+        <div class="div2" onclick="alert('Strecken-Seite kommt bald!')">
+            Strecken
+        </div>
+
+        <!-- DIV3 - Aktuelles -->
+        <div class="div3" onclick="alert('Aktuelles-Seite kommt bald!')">
+            Aktuelles
+        </div>
+
+        <!-- DIV4 - Admin Dropdown -->
+        <div class="div4">
+            <span>⚙️ Admin</span>
+            <div class="admin-dropdown-content">
+                <div class="dropdown-item" id="uploadBtn">📤 CSV hochladen</div>
+                <div class="dropdown-item" id="exportBtn">📥 Backup (CSV)</div>
+                <div class="dropdown-item" onclick="alert('Über mich-Seite kommt bald!')">👤 Über mich</div>
+            </div>
+            <input type="file" id="importFile" accept=".csv" style="display: none;">
+        </div>
+
+        <!-- DIV5 - Suchleiste -->
+        <div class="div5">
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-input" id="searchInput" placeholder="Suche nach Orten, Trails, Koordinaten...">
+            </div>
+            <span class="instruction-text">💡 Klicke auf die Karte, um einen Marker zu setzen</span>
+        </div>
+
+        <!-- DIV6 - Karte -->
+        <div class="div6">
+            <div class="map-layer-control">
+                <button class="layer-btn active" data-layer="standard">🗺️ Standard</button>
+                <button class="layer-btn" data-layer="satellite">🛰️ Satellit</button>
+                <button class="layer-btn" data-layer="hybrid">🌍 Hybrid</button>
+                <button class="layer-btn" data-layer="terrain">⛰️ Terrain</button>
+            </div>
+            
+            <!-- Marker Type Selection Modal (auf Karte) -->
+            <div id="typeSelectionModal" class="type-selection-modal">
+                <h3>📍 Marker-Art wählen</h3>
+                <p class="instruction">Wähle die Art des Markers:</p>
+                
+                <div class="type-buttons-grid">
+                    <button class="type-btn" onclick="selectType('danger')">⚠️ Gefahrenstelle</button>
+                    <button class="type-btn" onclick="selectType('viewpoint')">🏔️ Aussichtspunkt</button>
+                    <button class="type-btn" onclick="selectType('service')">🔧 Service</button>
+                    <button class="type-btn" onclick="selectType('parking')">🅿️ Parkplatz</button>
+                    <button class="type-btn" onclick="selectType('startpoint')">🏁 Startpunkt</button>
+                    <button class="type-btn" onclick="selectType('route')">🚵 Strecke</button>
+                </div>
+                
+                <button class="btn btn-cancel type-modal-cancel" onclick="cancelMarkerCreation()">❌ Abbrechen</button>
+            </div>
+            
+            <!-- Route Info Overlay -->
+            <div id="routeInfoOverlay" class="route-info-overlay" style="display: none;">
+                <h3 id="overlayTitle">📍 Strecke zeichnen</h3>
+                <p id="overlayInstruction">Klicke auf die Karte, um Wegpunkte zu setzen</p>
+                <div id="groupInfoContainer" class="group-info-badge" style="display: none;">
+                    Gruppe: <span id="currentGroupName"></span>
+                </div>
+                <div class="route-point-count"><span id="routePointCountOverlay">0</span> Punkte</div>
+                <div class="route-overlay-buttons">
+                    <button class="btn btn-primary" onclick="finishRouteDrawing()">✅ Beenden</button>
+                    <button class="btn btn-cancel" onclick="cancelRouteDrawing()">❌ Abbrechen</button>
+                </div>
+            </div>
+            
+            <div id="map"></div>
+        </div>
+
+        <!-- DIV7 - Sidebar -->
+        <div class="div7">
+            <!-- Aktive Gruppe Anzeige -->
+            <div id="activeGroupInfo" class="active-group-info" style="display: none;">
+                <p class="group-title">🔗 Aktive Gruppe: <span id="activeGroupNameSidebar"></span></p>
+                <p class="group-count"><span id="groupItemCount">0</span> Element(e) in dieser Gruppe</p>
+                <button class="btn btn-primary" onclick="addToCurrentGroup()">
+                    📦 Gruppe verwalten
+                </button>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>📊 Statistik</h3>
+                <p style="font-size: 1.2rem; font-weight: 600; color: var(--secondary-green);">
+                    <span id="markerCount">0</span> Marker auf der Karte
+                </p>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>🗺️ Gespeicherte Marker</h3>
+                <div class="marker-list-container" id="markerListContainer">
+                    <p style="color: #999; text-align: center; padding: 1rem;">Noch keine Marker</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal" id="markerModal">
+        <div class="modal-content">
+            <span class="modal-close" id="modalClose">&times;</span>
+            <h2 id="modalTitle">Marker-Details eingeben</h2>
+            
+            <form id="markerForm" autocomplete="off">
+                <div class="form-group" id="markerTypeDisplay">
+                    <label>Marker-Typ</label>
+                    <div style="padding: 0.8rem; background-color: var(--light-beige); border-radius: 5px; font-weight: 600;">
+                        <span id="selectedTypeLabel"></span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="markerName">Name/Titel</label>
+                    <input type="text" id="markerName" required placeholder="z.B. Flow Trail Waldweg" autocomplete="off">
+                </div>
+
+                <div class="form-group" id="difficultyGroup" style="display: none;">
+                    <label for="markerDifficulty">Schwierigkeit</label>
+                    <select id="markerDifficulty">
+                        <option value="easy">Leicht (Grün)</option>
+                        <option value="medium">Mittel (Blau)</option>
+                        <option value="hard">Schwer (Rot)</option>
+                        <option value="extreme">Extrem (Schwarz)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="markerDescription">Beschreibung</label>
+                    <textarea id="markerDescription" rows="3" placeholder="Beschreibe die Strecke..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="markerEmail">Deine E-Mail (optional)</label>
+                    <input type="email" id="markerEmail" placeholder="deine@email.de">
+                </div>
+
+                <div class="form-buttons">
+                    <button type="button" class="btn btn-secondary" id="sendEmailBtn" onclick="sendMarkerEmail()">📧 Jetzt senden</button>
+                    <button type="button" class="btn btn-primary" id="addToGroupBtn" onclick="addMarkerToGroup()">➕ Zur Gruppe hinzufügen</button>
+                    <button type="button" class="btn btn-cancel" id="cancelBtn" onclick="closeModal()">Abbrechen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Gruppen-Übersichts-Modal -->
+    <div class="modal" id="groupOverviewModal">
+        <div class="modal-content" id="groupModalContent" style="max-width: 600px;">
+            <button class="minimize-toggle-btn" id="minimizeToggleBtn" onclick="toggleMinimizeGroupModal()">📐</button>
+            <span class="modal-close" onclick="closeGroupOverviewModal()">&times;</span>
+            <h2>📦 Gruppen-Übersicht</h2>
+            
+            <div class="form-group">
+                <label for="groupNameInput">Gruppen-Name</label>
+                <input type="text" id="groupNameInput" placeholder="z.B. Waldtrail Süd" autocomplete="off">
+            </div>
+
+            <div class="sidebar-section">
+                <h3>📍 Elemente in dieser Gruppe (<span id="groupItemCountModal">0</span>)</h3>
+                <div id="groupItemsList" style="max-height: 300px; overflow-y: auto;">
+                    <!-- Wird dynamisch befüllt -->
+                </div>
+            </div>
+
+            <div class="form-buttons">
+                <button type="button" class="btn btn-primary" onclick="showGroupOnMap()" style="background-color: #3b82f6;">🗺️ Auf Karte anzeigen</button>
+            </div>
+
+            <div class="form-buttons" style="margin-top: 0.5rem;">
+                <button type="button" class="btn btn-primary" onclick="addAnotherToGroup()">➕ Weiteren Punkt hinzufügen</button>
+                <button type="button" class="btn btn-secondary" onclick="sendGroupFromModal()">📧 Gruppe senden</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    
+    <script>
+        let map;
+        let currentLayer;
+        let markers = [];
+        let tempMarkerData = null;
+        let routeMode = false;
+        let routePoints = [];
+        let tempPolyline = null;
+        let tempRouteMarkers = []; // Array für die temporären Punkt-Marker
+        let waitingForType = false;
+        let clickedPosition = null;
+        
+        // Gruppen-System
+        let currentGroup = null; // { id, name, items: [], mainRoute: {} }
+        let groupMode = false;
+        let tempGroupPreviewMarkers = []; // Temporäre Marker/Linien für Gruppen-Vorschau
+        let tempSingleMarkerPreview = null; // Temporärer Marker für Einzelvorschau
+        
+        const ADMIN_EMAIL = 'Lenardo.krueger@icloud.com';
+
+        const markerTypes = {
+            trail: { name: 'Trail', icon: '🚵', color: '#4a7c2c' },
+            danger: { name: 'Gefahrenstelle', icon: '⚠️', color: '#dc2626' },
+            viewpoint: { name: 'Aussichtspunkt', icon: '🏔️', color: '#2563eb' },
+            service: { name: 'Service', icon: '🔧', color: '#d97316' },
+            parking: { name: 'Parkplatz', icon: '🅿️', color: '#6366f1' },
+            startpoint: { name: 'Startpunkt', icon: '🏁', color: '#10b981' },
+            route: { name: 'Strecke', icon: '📍', color: '#8b5cf6' }
+        };
+
+        const difficultyColors = {
+            easy: '#22c55e',
+            medium: '#3b82f6',
+            hard: '#ef4444',
+            extreme: '#000000'
+        };
+
+        const mapLayers = {
+            standard: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                maxZoom: 19
+            }),
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri',
+                maxZoom: 19
+            }),
+            hybrid: L.layerGroup([
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 19
+                }),
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    opacity: 0.3,
+                    maxZoom: 19
+                })
+            ]),
+            terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenTopoMap',
+                maxZoom: 17
+            })
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM geladen - starte Initialisierung');
+            setTimeout(() => {
+                initMap();
+                loadMarkersFromStorage();
+                setupEventListeners();
+                updateMarkerList();
+            }, 100);
+        });
+
+        function initMap() {
+            console.log('Initialisiere Karte...');
+            try {
+                map = L.map('map').setView([51.1657, 10.4515], 6);
+                currentLayer = mapLayers.standard;
+                currentLayer.addTo(map);
+                
+                // Maßstab hinzufügen
+                L.control.scale({
+                    position: 'bottomleft',
+                    metric: true,
+                    imperial: false,
+                    maxWidth: 200
+                }).addTo(map);
+                
+                map.on('click', onMapClick);
+                console.log('Karte erfolgreich initialisiert');
+            } catch (error) {
+                console.error('Fehler beim Initialisieren der Karte:', error);
+            }
+        }
+
+        function setupEventListeners() {
+            document.querySelectorAll('.layer-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    switchMapLayer(btn.dataset.layer);
+                });
+            });
+
+            document.getElementById('modalClose').addEventListener('click', closeModal);
+            document.getElementById('markerModal').addEventListener('click', (e) => {
+                if (e.target.id === 'markerModal') closeModal();
+            });
+
+            document.getElementById('exportBtn').addEventListener('click', exportMarkers);
+            document.getElementById('uploadBtn').addEventListener('click', () => {
+                document.getElementById('importFile').click();
+            });
+            document.getElementById('importFile').addEventListener('change', importMarkersCSV);
+
+            const textarea = document.getElementById('markerDescription');
+            textarea.addEventListener('input', autoExpandTextarea);
+
+            document.getElementById('searchInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    searchLocation(e.target.value);
+                }
+            });
+
+            // Difficulty Dropdown: Route-Preview bei Änderung aktualisieren
+            document.getElementById('markerDifficulty').addEventListener('change', () => {
+                if (routeMode && routePoints.length > 1) {
+                    updateRoutePreview();
+                }
+            });
+        }
+
+        function switchMapLayer(layerType) {
+            if (currentLayer) map.removeLayer(currentLayer);
+            currentLayer = mapLayers[layerType];
+            currentLayer.addTo(map);
+        }
+
+        function onMapClick(e) {
+            console.log('Karte geklickt:', e.latlng, 'Route-Modus:', routeMode, 'Warte auf Typ:', waitingForType);
+            
+            if (routeMode) {
+                // Strecken-Modus: Punkt zur Route hinzufügen
+                routePoints.push([e.latlng.lat, e.latlng.lng]);
+                updateRoutePreview();
+                document.getElementById('routePointCountOverlay').textContent = routePoints.length;
+                console.log('Route-Punkt hinzugefügt. Gesamt:', routePoints.length);
+            } else if (waitingForType) {
+                // Warten auf Typ-Auswahl nach Gruppen-Hinzufügen
+                if (window.pendingMarkerType) {
+                    // Typ wurde schon gewählt, jetzt Punkt setzen
+                    clickedPosition = { lat: e.latlng.lat, lng: e.latlng.lng };
+                    waitingForType = false;
+                    tempMarkerData = { 
+                        lat: clickedPosition.lat, 
+                        lng: clickedPosition.lng, 
+                        type: window.pendingMarkerType 
+                    };
+                    window.pendingMarkerType = null;
+                    clickedPosition = null;
+                    openModal();
+                } else {
+                    // Noch kein Typ gewählt - ignorieren
+                    return;
+                }
+            } else {
+                // Erster Klick: Position speichern, Typ-Modal anzeigen
+                clickedPosition = { lat: e.latlng.lat, lng: e.latlng.lng };
+                waitingForType = true;
+                showTypeSelectionModal();
+            }
+        }
+
+        function showTypeSelectionModal() {
+            document.getElementById('typeSelectionModal').classList.add('active');
+            document.getElementById('streckSubmenu').classList.remove('active');
+        }
+
+        function hideTypeSelectionModal() {
+            document.getElementById('typeSelectionModal').classList.remove('active');
+        }
+
+        function selectType(type) {
+            console.log('Typ ausgewählt:', type);
+            
+            // Type Selection Modal schließen
+            hideTypeSelectionModal();
+            waitingForType = false;
+
+            if (type === 'route') {
+                // Ganze Strecke: Strecken-Modus aktivieren
+                routeMode = true;
+                routePoints = [];
+                
+                // Overlay auf Karte anzeigen
+                document.getElementById('routeInfoOverlay').style.display = 'block';
+                document.getElementById('routePointCountOverlay').textContent = '0';
+                
+                if (groupMode && currentGroup) {
+                    document.getElementById('overlayTitle').textContent = '📍 Weitere Strecke zur Gruppe';
+                    document.getElementById('groupInfoContainer').style.display = 'block';
+                    document.getElementById('currentGroupName').textContent = currentGroup.name;
+                } else {
+                    document.getElementById('overlayTitle').textContent = '📍 Strecke zeichnen';
+                    document.getElementById('groupInfoContainer').style.display = 'none';
+                }
+                
+                console.log('Strecken-Modus aktiviert. Klicke auf die Karte, um Punkte zu setzen.');
+            } else {
+                // Normaler Marker - wenn im Gruppen-Modus, keinen clickedPosition Check
+                if (groupMode && currentGroup && !clickedPosition) {
+                    // Im Gruppen-Modus: Warte auf Klick auf Karte
+                    waitingForType = true;
+                    clickedPosition = null;
+                    // Temporär den Typ speichern
+                    window.pendingMarkerType = type;
+                    return;
+                }
+                
+                tempMarkerData = { 
+                    lat: clickedPosition.lat, 
+                    lng: clickedPosition.lng, 
+                    type: type 
+                };
+                openModal();
+            }
+            
+            clickedPosition = null;
+        }
+
+        function cancelMarkerCreation() {
+            waitingForType = false;
+            clickedPosition = null;
+            hideTypeSelectionModal();
+        }
+
+        function updateRoutePreview() {
+            // Alte Linie entfernen
+            if (tempPolyline) {
+                map.removeLayer(tempPolyline);
+            }
+
+            // Alte Marker entfernen
+            tempRouteMarkers.forEach(marker => map.removeLayer(marker));
+            tempRouteMarkers = [];
+
+            if (routePoints.length > 0) {
+                const difficulty = document.getElementById('markerDifficulty').value || 'medium';
+                const color = difficultyColors[difficulty];
+                
+                // Punkte als kleine Marker anzeigen
+                routePoints.forEach((point, index) => {
+                    const markerIcon = L.divIcon({
+                        html: `<div style="
+                            background-color: ${color};
+                            color: white;
+                            border-radius: 50%;
+                            width: 24px;
+                            height: 24px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-weight: bold;
+                            font-size: 12px;
+                            border: 2px solid white;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                        ">${index + 1}</div>`,
+                        className: 'route-point-marker',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    });
+                    
+                    const marker = L.marker(point, { icon: markerIcon }).addTo(map);
+                    tempRouteMarkers.push(marker);
+                });
+
+                // Linie zeichnen wenn mehr als 1 Punkt
+                if (routePoints.length > 1) {
+                    tempPolyline = L.polyline(routePoints, {
+                        color: color,
+                        weight: 4,
+                        opacity: 0.7
+                    }).addTo(map);
+                }
+                
+                console.log('Route-Preview aktualisiert. Punkte:', routePoints.length, 'Farbe:', color);
+            }
+        }
+
+        function finishRouteDrawing() {
+            if (routePoints.length < 2) {
+                alert('⚠️ Eine Strecke braucht mindestens 2 Punkte!');
+                return;
+            }
+
+            console.log('Strecke wird beendet mit', routePoints.length, 'Punkten');
+
+            // Overlay ausblenden
+            document.getElementById('routeInfoOverlay').style.display = 'none';
+
+            // Route-Daten vorbereiten
+            tempMarkerData = {
+                isRoute: true,
+                points: [...routePoints],
+                type: 'route'
+            };
+
+            // Modal öffnen für Details-Eingabe
+            document.getElementById('selectedTypeLabel').textContent = '📍 Ganze Strecke';
+            document.getElementById('difficultyGroup').style.display = 'block';
+            
+            if (groupMode && currentGroup) {
+                // Bereits in Gruppen-Modus
+                document.getElementById('modalTitle').textContent = 'Details für weitere Strecke';
+            } else {
+                // Erste Strecke
+                document.getElementById('modalTitle').textContent = 'Strecke - Details eingeben';
+            }
+            
+            openModal();
+        }
+
+        function cancelRouteDrawing() {
+            if (!confirm('Strecke wirklich abbrechen?\n\nAlle gesetzten Punkte gehen verloren!')) {
+                return;
+            }
+
+            // Route-Modus beenden
+            routeMode = false;
+            routePoints = [];
+            
+            // Overlay ausblenden
+            document.getElementById('routeInfoOverlay').style.display = 'none';
+            
+            // Vorschau-Linie entfernen
+            if (tempPolyline) {
+                map.removeLayer(tempPolyline);
+                tempPolyline = null;
+            }
+
+            // Punkt-Marker entfernen
+            tempRouteMarkers.forEach(marker => map.removeLayer(marker));
+            tempRouteMarkers = [];
+
+            console.log('Strecken-Zeichnung abgebrochen');
+        }
+
+        function openModal() {
+            document.getElementById('markerModal').classList.add('active');
+            document.getElementById('markerForm').reset();
+            const textarea = document.getElementById('markerDescription');
+            textarea.style.height = 'auto';
+
+            // Buttons-Sichtbarkeit und Text setzen
+            const addToGroupBtn = document.getElementById('addToGroupBtn');
+            
+            if (groupMode && currentGroup) {
+                // In Gruppen-Modus: nur "Zur Gruppe hinzufügen"
+                document.getElementById('sendEmailBtn').style.display = 'none';
+                addToGroupBtn.style.display = 'inline-block';
+                addToGroupBtn.textContent = '➕ Zur Gruppe hinzufügen';
+            } else {
+                // Kein Gruppen-Modus: beide Buttons, erster Button sagt "Gruppe erstellen"
+                document.getElementById('sendEmailBtn').style.display = 'inline-block';
+                addToGroupBtn.style.display = 'inline-block';
+                addToGroupBtn.textContent = '📦 Gruppe erstellen';
+            }
+
+            // Typ-Label und Placeholder setzen
+            if (tempMarkerData && tempMarkerData.type) {
+                const typeConfig = markerTypes[tempMarkerData.type];
+                document.getElementById('selectedTypeLabel').textContent = `${typeConfig.icon} ${typeConfig.name}`;
+                
+                // Dynamischer Placeholder basierend auf Typ
+                const placeholders = {
+                    danger: 'Beschreibe die Gefahrenstelle (z.B. steile Abfahrt, Wurzeln, loses Geröll)...',
+                    viewpoint: 'Beschreibe den Aussichtspunkt (z.B. Blick ins Tal, Bergpanorama)...',
+                    service: 'Beschreibe den Service-Punkt (z.B. Werkstatt, Luftpumpe, Reparatur)...',
+                    parking: 'Beschreibe den Parkplatz (z.B. Anzahl Plätze, Kosten, Ausstattung)...',
+                    startpoint: 'Beschreibe den Startpunkt (z.B. Besonderheiten, Hinweise)...',
+                    route: 'Beschreibe die Strecke (z.B. Untergrund, Highlights, Schwierigkeiten)...',
+                    trail: 'Beschreibe den Trail (z.B. Flow, Technik, Landschaft)...'
+                };
+                
+                textarea.placeholder = placeholders[tempMarkerData.type] || 'Beschreibe diesen Punkt...';
+                
+                // Schwierigkeit anzeigen für Startpunkt und Route
+                if (['startpoint', 'route'].includes(tempMarkerData.type)) {
+                    document.getElementById('difficultyGroup').style.display = 'block';
+                } else {
+                    document.getElementById('difficultyGroup').style.display = 'none';
+                }
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('markerModal').classList.remove('active');
+            
+            // Wenn Route-Modus aktiv ist und noch nicht beendet wurde, NICHT zurücksetzen
+            if (routeMode) {
+                console.log('Modal geschlossen, Route-Modus bleibt aktiv');
+            } else {
+                tempMarkerData = null;
+                waitingForType = false;
+                clickedPosition = null;
+            }
+        }
+
+        function autoExpandTextarea(e) {
+            const textarea = e.target;
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 300) + 'px';
+        }
+
+        function addMarkerToGroup() {
+            const name = document.getElementById('markerName').value.trim();
+            const difficulty = document.getElementById('markerDifficulty').value;
+            const description = document.getElementById('markerDescription').value;
+            
+            if (!name) {
+                alert('⚠️ Bitte gib einen Namen ein!');
+                return;
+            }
+
+            if (!groupMode) {
+                // Erste Strecke/Punkt - Gruppe initialisieren
+                const itemData = {
+                    name: name,
+                    type: tempMarkerData.type,
+                    difficulty: difficulty,
+                    description: description
+                };
+                
+                if (tempMarkerData.isRoute) {
+                    itemData.points = tempMarkerData.points;
+                    itemData.isRoute = true;
+                    
+                    // Strecken-Modus beenden
+                    routeMode = false;
+                    routePoints = [];
+                    if (tempPolyline) {
+                        map.removeLayer(tempPolyline);
+                        tempPolyline = null;
+                    }
+                    // Punkt-Marker entfernen
+                    tempRouteMarkers.forEach(marker => map.removeLayer(marker));
+                    tempRouteMarkers = [];
+                } else {
+                    itemData.lat = tempMarkerData.lat;
+                    itemData.lng = tempMarkerData.lng;
+                }
+
+                currentGroup = {
+                    id: Date.now(),
+                    name: name, // Initial der Name des ersten Elements
+                    items: [itemData]
+                };
+                groupMode = true;
+                
+                closeModal();
+                tempMarkerData = null;
+                
+                // Gruppen-Übersichts-Modal öffnen
+                openGroupOverviewModal();
+                
+            } else {
+                // Weiterer Marker zur Gruppe
+                const itemData = {
+                    name: name,
+                    type: tempMarkerData.type,
+                    difficulty: difficulty,
+                    description: description
+                };
+                
+                if (tempMarkerData.isRoute) {
+                    itemData.points = tempMarkerData.points;
+                    itemData.isRoute = true;
+                    
+                    // Strecken-Modus beenden
+                    routeMode = false;
+                    routePoints = [];
+                    if (tempPolyline) {
+                        map.removeLayer(tempPolyline);
+                        tempPolyline = null;
+                    }
+                    // Punkt-Marker entfernen
+                    tempRouteMarkers.forEach(marker => map.removeLayer(marker));
+                    tempRouteMarkers = [];
+                } else {
+                    itemData.lat = tempMarkerData.lat;
+                    itemData.lng = tempMarkerData.lng;
+                }
+                
+                currentGroup.items.push(itemData);
+                
+                closeModal();
+                tempMarkerData = null;
+                
+                // Gruppen-Übersichts-Modal öffnen/aktualisieren
+                openGroupOverviewModal();
+            }
+        }
+
+        function openGroupOverviewModal() {
+            if (!currentGroup) return;
+
+            // Gruppennamen setzen
+            document.getElementById('groupNameInput').value = currentGroup.name;
+
+            // Items-Liste aufbauen
+            updateGroupItemsList();
+
+            // Modal öffnen
+            document.getElementById('groupOverviewModal').classList.add('active');
+        }
+
+        function updateGroupItemsList() {
+            if (!currentGroup) return;
+
+            const container = document.getElementById('groupItemsList');
+            const count = document.getElementById('groupItemCountModal');
+            
+            count.textContent = currentGroup.items.length;
+
+            if (currentGroup.items.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center; padding: 1rem;">Noch keine Elemente</p>';
+                return;
+            }
+
+            container.innerHTML = currentGroup.items.map((item, index) => {
+                const typeConfig = markerTypes[item.type];
+                let coordInfo = '';
+                
+                if (item.isRoute) {
+                    coordInfo = `📏 Strecke mit ${item.points.length} Wegpunkten`;
+                } else {
+                    coordInfo = `📍 ${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`;
+                }
+
+                return `
+                    <div class="group-item-card">
+                        <div class="group-item-header">
+                            <span class="group-item-title">${index + 1}. ${item.name}</span>
+                            <span class="group-item-icon">${typeConfig.icon}</span>
+                        </div>
+                        <div class="group-item-type">${typeConfig.name}${item.difficulty ? ' • ' + getDifficultyLabel(item.difficulty) : ''}</div>
+                        <div class="group-item-coords">${coordInfo}</div>
+                        ${item.description ? `<div style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;">${item.description}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showGroupOnMap() {
+            if (!currentGroup || currentGroup.items.length === 0) {
+                alert('⚠️ Keine Elemente in der Gruppe!');
+                return;
+            }
+
+            // Alte Vorschau-Marker entfernen
+            clearGroupPreview();
+
+            // Alle Elemente auf der Karte anzeigen
+            const allPoints = [];
+
+            currentGroup.items.forEach((item, index) => {
+                const typeConfig = markerTypes[item.type];
+                
+                if (item.isRoute && item.points) {
+                    // Strecke als Linie zeichnen
+                    const color = difficultyColors[item.difficulty] || '#8b5cf6';
+                    const polyline = L.polyline(item.points, {
+                        color: color,
+                        weight: 5,
+                        opacity: 0.8,
+                        dashArray: '10, 5' // Gestrichelt für Vorschau
+                    }).addTo(map);
+                    
+                    polyline.bindPopup(`
+                        <div style="min-width: 150px;">
+                            <h4 style="margin: 0 0 0.5rem 0; color: ${color};">
+                                ${typeConfig.icon} ${item.name}
+                            </h4>
+                            <p style="margin: 0; font-size: 0.85rem;">
+                                <strong>Typ:</strong> ${typeConfig.name}<br>
+                                ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
+                                <strong>Wegpunkte:</strong> ${item.points.length}
+                            </p>
+                        </div>
+                    `);
+                    
+                    tempGroupPreviewMarkers.push(polyline);
+                    item.points.forEach(p => allPoints.push(p));
+                } else {
+                    // Einzelner Marker
+                    const markerIcon = L.divIcon({
+                        html: `<div style="font-size: 2.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">${typeConfig.icon}</div>`,
+                        className: 'custom-marker',
+                        iconSize: [35, 35],
+                        iconAnchor: [17, 35]
+                    });
+
+                    const marker = L.marker([item.lat, item.lng], { icon: markerIcon }).addTo(map);
+                    
+                    marker.bindPopup(`
+                        <div style="min-width: 150px;">
+                            <h4 style="margin: 0 0 0.5rem 0; color: ${typeConfig.color};">
+                                ${typeConfig.icon} ${item.name}
+                            </h4>
+                            <p style="margin: 0; font-size: 0.85rem;">
+                                <strong>Typ:</strong> ${typeConfig.name}<br>
+                                ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
+                                📍 ${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}
+                            </p>
+                        </div>
+                    `);
+                    
+                    tempGroupPreviewMarkers.push(marker);
+                    allPoints.push([item.lat, item.lng]);
+                }
+            });
+
+            // Karte auf alle Punkte zoomen
+            if (allPoints.length > 0) {
+                const bounds = L.latLngBounds(allPoints);
+                map.fitBounds(bounds, { 
+                    padding: [50, 50],
+                    maxZoom: 15
+                });
+            }
+
+            // Modal minimieren für bessere Sicht
+            minimizeGroupModal();
+        }
+
+        function clearGroupPreview() {
+            // Alle temporären Gruppen-Vorschau-Marker entfernen
+            tempGroupPreviewMarkers.forEach(item => {
+                map.removeLayer(item);
+            });
+            tempGroupPreviewMarkers = [];
+        }
+
+        function minimizeGroupModal() {
+            const modalContent = document.getElementById('groupModalContent');
+            const toggleBtn = document.getElementById('minimizeToggleBtn');
+            const modal = document.getElementById('groupOverviewModal');
+            
+            modalContent.classList.add('minimized');
+            modal.style.backgroundColor = 'transparent'; // Hintergrund durchsichtig
+            toggleBtn.textContent = '📋'; // Icon ändern zu "maximieren"
+        }
+
+        function maximizeGroupModal() {
+            const modalContent = document.getElementById('groupModalContent');
+            const toggleBtn = document.getElementById('minimizeToggleBtn');
+            const modal = document.getElementById('groupOverviewModal');
+            
+            modalContent.classList.remove('minimized');
+            modal.style.backgroundColor = 'rgba(0,0,0,0.5)'; // Hintergrund wieder normal
+            toggleBtn.textContent = '📐'; // Icon ändern zu "minimieren"
+        }
+
+        function toggleMinimizeGroupModal() {
+            const modalContent = document.getElementById('groupModalContent');
+            
+            if (modalContent.classList.contains('minimized')) {
+                maximizeGroupModal();
+            } else {
+                minimizeGroupModal();
+            }
+        }
+
+        function closeGroupOverviewModal() {
+            // Gruppennamen aus Input aktualisieren
+            if (currentGroup) {
+                const newName = document.getElementById('groupNameInput').value.trim();
+                if (newName) {
+                    currentGroup.name = newName;
+                }
+            }
+            
+            // Gruppen-Vorschau entfernen
+            clearGroupPreview();
+            
+            // Modal maximieren falls minimiert
+            maximizeGroupModal();
+            
+            document.getElementById('groupOverviewModal').classList.remove('active');
+            
+            // Sidebar-UI aktualisieren
+            updateGroupUI();
+        }
+
+        function addAnotherToGroup() {
+            if (!groupMode || !currentGroup) {
+                alert('⚠️ Keine aktive Gruppe vorhanden!');
+                return;
+            }
+
+            // Gruppennamen speichern
+            const newName = document.getElementById('groupNameInput').value.trim();
+            if (newName) {
+                currentGroup.name = newName;
+            }
+
+            // Gruppen-Modal schließen
+            document.getElementById('groupOverviewModal').classList.remove('active');
+            
+            // Typ-Auswahl-Modal öffnen
+            waitingForType = true;
+            showTypeSelectionModal();
+        }
+
+        function sendGroupFromModal() {
+            if (!currentGroup || currentGroup.items.length === 0) {
+                alert('⚠️ Keine Elemente in der Gruppe!');
+                return;
+            }
+
+            // Gruppennamen aktualisieren
+            const newName = document.getElementById('groupNameInput').value.trim();
+            if (newName) {
+                currentGroup.name = newName;
+            }
+
+            if (!confirm(`Gruppe "${currentGroup.name}" mit ${currentGroup.items.length} Element(en) per E-Mail senden?`)) {
+                return;
+            }
+
+            sendGroupEmail();
+        }
+
+        function addToCurrentGroup() {
+            if (!groupMode || !currentGroup) {
+                alert('⚠️ Keine aktive Gruppe vorhanden!');
+                return;
+            }
+            
+            // Gruppen-Übersichts-Modal öffnen
+            openGroupOverviewModal();
+        }
+
+        function updateGroupUI() {
+            if (groupMode && currentGroup) {
+                document.getElementById('activeGroupInfo').style.display = 'block';
+                document.getElementById('activeGroupNameSidebar').textContent = currentGroup.name;
+                document.getElementById('groupItemCount').textContent = currentGroup.items.length;
+            } else {
+                document.getElementById('activeGroupInfo').style.display = 'none';
+            }
+        }
+
+        function finishGroup() {
+            if (!groupMode || !currentGroup) {
+                alert('⚠️ Keine aktive Gruppe vorhanden!');
+                return;
+            }
+            
+            if (!confirm(`Gruppe "${currentGroup.name}" mit ${currentGroup.items.length} Element(en) abschließen und per E-Mail senden?`)) {
+                return;
+            }
+            
+            sendGroupEmail();
+        }
+
+        function sendGroupEmail() {
+            if (!currentGroup || currentGroup.items.length === 0) return;
+            
+            const email = document.getElementById('markerEmail').value;
+            
+            // CSV-Zeilen generieren
+            let csvLines = [];
+            
+            // E-Mail Body aufbauen
+            let groupItemsText = '';
+            
+            currentGroup.items.forEach((item, index) => {
+                const typeConfig = markerTypes[item.type];
+                
+                if (item.isRoute) {
+                    const pointsStr = item.points.map(p => `${p[0].toFixed(6)}/${p[1].toFixed(6)}`).join('|');
+                    csvLines.push(`${item.name},${pointsStr},${item.type},${item.difficulty},${item.description || ''}`);
+                    
+                    groupItemsText += `\n${index + 1}. ${typeConfig.icon} ${item.name} (Strecke mit ${item.points.length} Punkten)`;
+                    if (item.difficulty) groupItemsText += `\n   └ Schwierigkeit: ${getDifficultyLabel(item.difficulty)}`;
+                    if (item.description) groupItemsText += `\n   └ ${item.description}`;
+                } else {
+                    csvLines.push(`${item.name},${item.lat.toFixed(6)},${item.lng.toFixed(6)},${item.type},${item.difficulty},${item.description || ''}`);
+                    
+                    groupItemsText += `\n${index + 1}. ${typeConfig.icon} ${item.name}`;
+                    groupItemsText += `\n   └ 📍 ${item.lat.toFixed(6)}, ${item.lng.toFixed(6)}`;
+                    if (item.difficulty) groupItemsText += `\n   └ Schwierigkeit: ${getDifficultyLabel(item.difficulty)}`;
+                    if (item.description) groupItemsText += `\n   └ ${item.description}`;
+                }
+            });
+            
+            const subject = `🚵 Neue Gruppe: ${currentGroup.name}`;
+            const body = `
+Hallo Admin,
+
+hier ist eine neue Marker-Gruppe:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📦 GRUPPE: ${currentGroup.name}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📍 ELEMENTE (${currentGroup.items.length})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${groupItemsText}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${email ? `Kontakt: ${email}\n\n` : ''}📋 CSV-ZEILEN ZUM KOPIEREN:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${csvLines.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Gesendet: ${new Date().toLocaleString('de-DE')}
+            `.trim();
+
+            window.location.href = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            
+            // Gruppen-Modal schließen
+            document.getElementById('groupOverviewModal').classList.remove('active');
+            
+            // Gruppe zurücksetzen
+            currentGroup = null;
+            groupMode = false;
+            updateGroupUI();
+        }
+
+        function sendMarkerEmail() {
+            if (!tempMarkerData) return;
+
+            const type = tempMarkerData.type;
+            const name = document.getElementById('markerName').value;
+            const difficulty = document.getElementById('markerDifficulty').value;
+            const description = document.getElementById('markerDescription').value;
+            const email = document.getElementById('markerEmail').value;
+            const typeConfig = markerTypes[type];
+
+            let csvLine;
+            let coordText;
+
+            if (tempMarkerData.isRoute) {
+                // Einzelne Strecke ohne Gruppe
+                const pointsStr = tempMarkerData.points.map(p => `${p[0].toFixed(6)}/${p[1].toFixed(6)}`).join('|');
+                csvLine = `${name},${pointsStr},${type},${difficulty},${description || ''}`;
+                coordText = `${tempMarkerData.points.length} Wegpunkte:\n${tempMarkerData.points.map((p, i) => `  ${i+1}. ${p[0].toFixed(6)}, ${p[1].toFixed(6)}`).join('\n')}`;
+                
+                // Strecken-Modus beenden und aufräumen
+                routeMode = false;
+                routePoints = [];
+                if (tempPolyline) {
+                    map.removeLayer(tempPolyline);
+                    tempPolyline = null;
+                }
+                // Punkt-Marker entfernen
+                tempRouteMarkers.forEach(marker => map.removeLayer(marker));
+                tempRouteMarkers = [];
+            } else {
+                // Einzelner Punkt
+                csvLine = `${name},${tempMarkerData.lat.toFixed(6)},${tempMarkerData.lng.toFixed(6)},${type},${difficulty},${description || ''}`;
+                coordText = `${tempMarkerData.lat.toFixed(6)}, ${tempMarkerData.lng.toFixed(6)}`;
+            }
+
+            const subject = `Neuer ${typeConfig.name} Marker: ${name}`;
+            const body = `
+Hallo Admin,
+
+hier ist ein neuer Marker-Vorschlag:
+
+📍 MARKER-DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Name: ${name}
+Typ: ${typeConfig.icon} ${typeConfig.name}
+${['startpoint', 'route'].includes(type) ? `Schwierigkeit: ${getDifficultyLabel(difficulty)}` : ''}
+
+Koordinaten:
+${coordText}
+
+Beschreibung:
+${description || 'Keine Beschreibung'}
+
+${email ? `Kontakt: ${email}` : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 CSV-ZEILE ZUM KOPIEREN:
+${csvLine}
+
+${!tempMarkerData.isRoute ? `🗺️ Google Maps:\nhttps://www.google.com/maps?q=${tempMarkerData.lat},${tempMarkerData.lng}` : ''}
+
+Gesendet: ${new Date().toLocaleString('de-DE')}
+            `.trim();
+
+            window.location.href = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            
+            closeModal();
+            tempMarkerData = null;
+        }
+
+        function addMarkerToMap(markerData) {
+            const typeConfig = markerTypes[markerData.type];
+
+            if (markerData.isRoute && markerData.points) {
+                // Strecke als Linie zeichnen
+                const color = difficultyColors[markerData.difficulty];
+                const polyline = L.polyline(markerData.points, {
+                    color: color,
+                    weight: 5,
+                    opacity: 0.8
+                }).addTo(map);
+
+                const popupContent = `
+                    <div style="min-width: 200px;">
+                        <h3 style="color: ${color}; margin: 0 0 10px 0;">${typeConfig.icon} ${markerData.name}</h3>
+                        <p><strong>Typ:</strong> ${typeConfig.name}</p>
+                        <p><strong>Schwierigkeit:</strong> ${getDifficultyLabel(markerData.difficulty)}</p>
+                        <p><strong>Länge:</strong> ${markerData.points.length} Wegpunkte</p>
+                        ${markerData.description ? `<p><strong>Beschreibung:</strong><br>${markerData.description}</p>` : ''}
+                        ${markerData.groupId ? `<p style="background-color: ${typeConfig.color}; color: white; padding: 0.3rem; border-radius: 3px; font-size: 0.85rem;">🔗 Gruppe: ${markerData.groupName}</p>` : ''}
+                    </div>
+                `;
+                polyline.bindPopup(popupContent);
+                polyline.markerId = markerData.id;
+            } else {
+                // Einzelner Marker
+                const customIcon = L.divIcon({
+                    html: `<div style="font-size: 2rem;">${typeConfig.icon}</div>`,
+                    className: 'custom-marker',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 30]
+                });
+
+                const marker = L.marker([markerData.lat, markerData.lng], { icon: customIcon }).addTo(map);
+                const popupContent = `
+                    <div style="min-width: 200px;">
+                        <h3 style="color: ${typeConfig.color}; margin: 0 0 10px 0;">${typeConfig.icon} ${markerData.name}</h3>
+                        <p><strong>Typ:</strong> ${typeConfig.name}</p>
+                        <p><strong>Schwierigkeit:</strong> ${getDifficultyLabel(markerData.difficulty)}</p>
+                        ${markerData.description ? `<p><strong>Beschreibung:</strong><br>${markerData.description}</p>` : ''}
+                        <p style="font-size: 0.85rem; color: #666;">📍 ${markerData.lat.toFixed(5)}, ${markerData.lng.toFixed(5)}</p>
+                        ${markerData.groupId ? `<p style="background-color: ${typeConfig.color}; color: white; padding: 0.3rem; border-radius: 3px; font-size: 0.85rem;">🔗 Gruppe: ${markerData.groupName}</p>` : ''}
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+                marker.markerId = markerData.id;
+            }
+        }
+
+        function getDifficultyLabel(d) {
+            const labels = { easy: '🟢 Leicht', medium: '🔵 Mittel', hard: '🔴 Schwer', extreme: '⚫ Extrem' };
+            return labels[d] || d;
+        }
+
+        function updateMarkerList() {
+            const container = document.getElementById('markerListContainer');
+            document.getElementById('markerCount').textContent = markers.length;
+
+            if (markers.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center; padding: 1rem;">Noch keine Marker</p>';
+                return;
+            }
+
+            container.innerHTML = markers.map(m => {
+                const t = markerTypes[m.type];
+                const coordDisplay = m.isRoute 
+                    ? `${m.points.length} Wegpunkte` 
+                    : `📍 ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}`;
+                
+                const groupBadge = m.groupId ? `<div class="marker-group-badge">🔗 ${m.groupName}</div>` : '';
+                
+                return `
+                    <div class="marker-item" onclick="focusMarker(${m.isRoute ? 'null' : m.lat}, ${m.isRoute ? 'null' : m.lng}, ${m.isRoute}, ${m.id})">
+                        <div class="marker-item-header">
+                            <span class="marker-item-title">${m.name}</span>
+                            <span class="marker-item-type">${t.icon}</span>
+                        </div>
+                        <div class="marker-item-coords">${coordDisplay}</div>
+                        ${groupBadge}
+                        <div class="marker-actions">
+                            <button class="show-on-map-btn" onclick="event.stopPropagation(); showSingleMarkerOnMap(${m.id})">🗺️ Anzeigen</button>
+                            <button class="delete-marker-btn" onclick="event.stopPropagation(); deleteMarker(${m.id})">Löschen</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function focusMarker(lat, lng, isRoute, id) {
+            if (isRoute) {
+                const marker = markers.find(m => m.id === id);
+                if (marker && marker.points) {
+                    const bounds = L.latLngBounds(marker.points);
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            } else {
+                map.setView([lat, lng], 15);
+            }
+        }
+
+        function showSingleMarkerOnMap(markerId) {
+            // Alte Vorschau entfernen
+            if (tempSingleMarkerPreview) {
+                map.removeLayer(tempSingleMarkerPreview);
+                tempSingleMarkerPreview = null;
+            }
+
+            const markerData = markers.find(m => m.id === markerId);
+            if (!markerData) return;
+
+            const typeConfig = markerTypes[markerData.type];
+
+            if (markerData.isRoute && markerData.points) {
+                // Strecke als gestrichelte Linie zeichnen
+                const color = difficultyColors[markerData.difficulty] || '#8b5cf6';
+                const polyline = L.polyline(markerData.points, {
+                    color: color,
+                    weight: 6,
+                    opacity: 0.9,
+                    dashArray: '10, 5'
+                }).addTo(map);
+
+                polyline.bindPopup(`
+                    <div style="min-width: 200px;">
+                        <h4 style="margin: 0 0 0.5rem 0; color: ${color};">
+                            ${typeConfig.icon} ${markerData.name}
+                        </h4>
+                        <p style="margin: 0; font-size: 0.9rem;">
+                            <strong>Typ:</strong> ${typeConfig.name}<br>
+                            ${markerData.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(markerData.difficulty)}<br>` : ''}
+                            <strong>Wegpunkte:</strong> ${markerData.points.length}
+                            ${markerData.description ? `<br><br>${markerData.description}` : ''}
+                        </p>
+                    </div>
+                `).openPopup();
+
+                tempSingleMarkerPreview = polyline;
+
+                // Zur Strecke zoomen
+                const bounds = L.latLngBounds(markerData.points);
+                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+            } else {
+                // Einzelner Punkt
+                const markerIcon = L.divIcon({
+                    html: `<div style="font-size: 3rem; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4)); animation: pulse 1.5s ease-in-out infinite;">
+                        ${typeConfig.icon}
+                    </div>
+                    <style>
+                        @keyframes pulse {
+                            0%, 100% { transform: scale(1); }
+                            50% { transform: scale(1.1); }
+                        }
+                    </style>`,
+                    className: 'custom-marker-preview',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 40]
+                });
+
+                const marker = L.marker([markerData.lat, markerData.lng], { icon: markerIcon }).addTo(map);
+                
+                marker.bindPopup(`
+                    <div style="min-width: 200px;">
+                        <h4 style="margin: 0 0 0.5rem 0; color: ${typeConfig.color};">
+                            ${typeConfig.icon} ${markerData.name}
+                        </h4>
+                        <p style="margin: 0; font-size: 0.9rem;">
+                            <strong>Typ:</strong> ${typeConfig.name}<br>
+                            ${markerData.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(markerData.difficulty)}<br>` : ''}
+                            📍 ${markerData.lat.toFixed(5)}, ${markerData.lng.toFixed(5)}
+                            ${markerData.description ? `<br><br>${markerData.description}` : ''}
+                        </p>
+                    </div>
+                `).openPopup();
+
+                tempSingleMarkerPreview = marker;
+
+                // Zum Marker zoomen
+                map.setView([markerData.lat, markerData.lng], 15);
+            }
+
+            // Nach 5 Sekunden Vorschau automatisch entfernen
+            setTimeout(() => {
+                if (tempSingleMarkerPreview) {
+                    map.removeLayer(tempSingleMarkerPreview);
+                    tempSingleMarkerPreview = null;
+                }
+            }, 5000);
+        }
+
+        function deleteMarker(id) {
+            if (!confirm('Marker wirklich löschen?\n\n⚠️ Nur als Admin: Dies löscht den Marker dauerhaft!')) return;
+            markers = markers.filter(m => m.id !== id);
+            saveMarkersToStorage();
+            reloadMap();
+            updateMarkerList();
+        }
+
+        function reloadMap() {
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+                    map.removeLayer(layer);
+                }
+            });
+            markers.forEach(m => addMarkerToMap(m));
+        }
+
+        function saveMarkersToStorage() {
+            localStorage.setItem('mtb_markers', JSON.stringify(markers));
+        }
+
+        function loadMarkersFromStorage() {
+            const stored = localStorage.getItem('mtb_markers');
+            if (stored) {
+                markers = JSON.parse(stored);
+                markers.forEach(m => addMarkerToMap(m));
+            }
+        }
+
+        function exportMarkers() {
+            if (markers.length === 0) {
+                alert('⚠️ Keine Marker zum Exportieren!');
+                return;
+            }
+
+            let csv = 'name,coordinates,type,difficulty,description,groupId,groupName\n';
+            markers.forEach(m => {
+                let coords;
+                if (m.isRoute && m.points) {
+                    coords = m.points.map(p => `${p[0]}/${p[1]}`).join('|');
+                } else {
+                    coords = `${m.lat},${m.lng}`;
+                }
+                csv += `"${m.name}","${coords}",${m.type},${m.difficulty},"${m.description || ''}",${m.groupId || ''},${m.groupName || ''}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `mtb-markers-${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            URL.revokeObjectURL(url);
+            alert('✅ Marker als CSV exportiert!');
+        }
+
+        function parseCoordinate(value) {
+            if (typeof value === 'number') return value;
+            let cleaned = value.replace(/["'\s]/g, '');
+            const dotCount = (cleaned.match(/\./g) || []).length;
+            if (dotCount > 1) {
+                const parts = cleaned.split('.');
+                const decimals = parts.pop();
+                cleaned = parts.join('') + '.' + decimals;
+            }
+            cleaned = cleaned.replace(',', '.');
+            return parseFloat(cleaned);
+        }
+
+        function importMarkersCSV(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const csv = event.target.result;
+                    const lines = csv.split('\n').filter(line => line.trim());
+
+                    if (lines.length === 0) throw new Error('CSV-Datei ist leer');
+
+                    const dataLines = lines.slice(1);
+                    if (dataLines.length === 0) throw new Error('CSV enthält keine Daten (nur Header)');
+
+                    const confirmed = confirm(
+                        `${dataLines.length} Zeilen gefunden.\n\n` +
+                        '⚠️ ACHTUNG: Alle bestehenden Marker werden ERSETZT!\n\nFortfahren?'
+                    );
+                    if (!confirmed) return;
+
+                    markers = [];
+                    let successCount = 0;
+                    let errorCount = 0;
+                    const errors = [];
+
+                    dataLines.forEach((line, index) => {
+                        const lineNum = index + 2;
+                        try {
+                            const separator = line.includes('\t') ? '\t' : ',';
+                            let values;
+                            if (separator === '\t') {
+                                values = line.split('\t').map(v => v.trim());
+                            } else {
+                                values = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g);
+                                if (values) values = values.map(v => v.replace(/^"|"$/g, '').trim());
+                            }
+
+                            if (!values || values.length < 5) throw new Error(`Zu wenig Spalten`);
+
+                            const name = values[0];
+                            const coordsStr = values[1];
+                            const type = values[2].toLowerCase().trim();
+                            const difficulty = values[3].toLowerCase().trim();
+                            const description = values[4] || '';
+                            const groupId = values[5] || null;
+                            const groupName = values[6] || null;
+
+                            if (!name) throw new Error('Name fehlt');
+                            if (!markerTypes[type]) throw new Error(`Ungültiger Typ: "${type}"`);
+
+                            const validDifficulties = ['easy', 'medium', 'hard', 'extreme'];
+                            if (!validDifficulties.includes(difficulty)) throw new Error(`Ungültige Schwierigkeit`);
+
+                            // Prüfen ob Strecke oder Punkt
+                            if (coordsStr.includes('|')) {
+                                // Strecke
+                                const points = coordsStr.split('|').map(p => {
+                                    const [lat, lng] = p.split('/').map(c => parseCoordinate(c));
+                                    if (isNaN(lat) || isNaN(lng)) throw new Error('Ungültige Koordinaten in Strecke');
+                                    return [lat, lng];
+                                });
+
+                                markers.push({
+                                    id: Date.now() + index,
+                                    name, type, difficulty, description,
+                                    isRoute: true,
+                                    points: points,
+                                    groupId: groupId,
+                                    groupName: groupName,
+                                    createdAt: new Date().toISOString()
+                                });
+                            } else {
+                                // Einzelpunkt
+                                const coords = coordsStr.split(',');
+                                const lat = parseCoordinate(coords[0]);
+                                const lng = parseCoordinate(coords[1]);
+
+                                if (isNaN(lat) || lat < -90 || lat > 90) throw new Error(`Ungültiger Breitengrad`);
+                                if (isNaN(lng) || lng < -180 || lng > 180) throw new Error(`Ungültiger Längengrad`);
+
+                                markers.push({
+                                    id: Date.now() + index,
+                                    name, lat, lng, type, difficulty, description,
+                                    groupId: groupId,
+                                    groupName: groupName,
+                                    createdAt: new Date().toISOString()
+                                });
+                            }
+                            successCount++;
+                        } catch (error) {
+                            errorCount++;
+                            errors.push(`Zeile ${lineNum}: ${error.message}`);
+                        }
+                    });
+
+                    if (successCount > 0) {
+                        saveMarkersToStorage();
+                        reloadMap();
+                        updateMarkerList();
+                    }
+
+                    let message = `✅ ${successCount} Marker erfolgreich importiert!`;
+                    if (errorCount > 0) {
+                        message += `\n\n⚠️ ${errorCount} Zeilen übersprungen:\n\n`;
+                        message += errors.slice(0, 5).join('\n');
+                        if (errors.length > 5) message += `\n... und ${errors.length - 5} weitere`;
+                    }
+                    alert(message);
+                } catch (error) {
+                    alert('❌ Fehler beim Importieren:\n' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        }
+
+        function searchLocation(query) {
+            if (!query.trim()) return;
+
+            const coordMatch = query.match(/(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)/);
+            if (coordMatch) {
+                const lat = parseFloat(coordMatch[1]);
+                const lng = parseFloat(coordMatch[2]);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    map.setView([lat, lng], 15);
+                    return;
+                }
+            }
+
+            const lowerQuery = query.toLowerCase();
+            const found = markers.find(m =>
+                m.name.toLowerCase().includes(lowerQuery) ||
+                (m.description && m.description.toLowerCase().includes(lowerQuery))
+            );
+
+            if (found) {
+                if (found.isRoute) {
+                    focusMarker(null, null, true, found.id);
+                } else {
+                    map.setView([found.lat, found.lng], 15);
+                }
+            } else {
+                alert('❌ Kein Marker gefunden. Versuche Koordinaten (z.B. "51.1657, 10.4515")');
+            }
+        }
+    </script>
+</body>
+</html>
