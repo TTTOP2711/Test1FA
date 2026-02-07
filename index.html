@@ -1381,6 +1381,14 @@
                 loadMarkersFromStorage();
                 setupEventListeners();
                 updateMarkerList();
+                
+                // Admin-Code-Eingabe mit Enter
+                const adminCodeInput = document.getElementById('adminCodeInput');
+                if (adminCodeInput) {
+                    adminCodeInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') checkAdminCode();
+                    });
+                }
             }, 100);
         });
 
@@ -1424,18 +1432,15 @@
                 if (e.target.id === 'markerModal') closeModal();
             });
 
-            document.getElementById('exportBtn').addEventListener('click', exportMarkers);
-            document.getElementById('uploadBtn').addEventListener('click', () => {
-                document.getElementById('importFile').click();
-            });
-            document.getElementById('importFile').addEventListener('change', importMarkersCSV);
-
             const textarea = document.getElementById('markerDescription');
-            textarea.addEventListener('input', autoExpandTextarea);
+            if (textarea) {
+                textarea.addEventListener('input', autoExpandTextarea);
+            }
 
             // Such-Event-Listener
             const searchInput = document.getElementById('searchInput');
             if (searchInput) {
+                console.log('✅ Suchfeld gefunden und Event-Listener registriert');
                 searchInput.addEventListener('input', handleSearchInput);
                 searchInput.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
@@ -1445,6 +1450,8 @@
                         }
                     }
                 });
+            } else {
+                console.error('❌ Suchfeld nicht gefunden!');
             }
 
             // Klick außerhalb schließt Dropdown
@@ -1455,11 +1462,14 @@
             });
 
             // Difficulty Dropdown: Route-Preview bei Änderung aktualisieren
-            document.getElementById('markerDifficulty').addEventListener('change', () => {
-                if (routeMode && routePoints.length > 1) {
-                    updateRoutePreview();
-                }
-            });
+            const difficultySelect = document.getElementById('markerDifficulty');
+            if (difficultySelect) {
+                difficultySelect.addEventListener('change', () => {
+                    if (routeMode && routePoints.length > 1) {
+                        updateRoutePreview();
+                    }
+                });
+            }
         }
 
         function switchMapLayer(layerType) {
@@ -3269,13 +3279,6 @@
             reader.readAsText(file);
             fileInput.value = '';
         }
-
-        // Admin-Code-Eingabe mit Enter
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('adminCodeInput')?.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') checkAdminCode();
-            });
-        });
     </script>
 </body>
 </html>
