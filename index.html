@@ -1136,7 +1136,7 @@
             </div>
 
             <div class="sidebar-section">
-                <h3>🗺️ Gespeicherte Marker</h3>
+                <h3>📍 Veröffentlichte Marker</h3>
                 <div class="marker-list-container" id="markerListContainer">
                     <p style="color: #999; text-align: center; padding: 1rem;">Noch keine Marker</p>
                 </div>
@@ -1176,11 +1176,6 @@
                 <div class="form-group">
                     <label for="markerDescription">Beschreibung</label>
                     <textarea id="markerDescription" rows="3" placeholder="Beschreibe die Strecke..." autocomplete="off"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="markerEmail">Deine E-Mail (optional)</label>
-                    <input type="email" id="markerEmail" placeholder="deine@email.de" autocomplete="off">
                 </div>
 
                 <div class="form-buttons">
@@ -1440,15 +1435,17 @@
 
             // Such-Event-Listener
             const searchInput = document.getElementById('searchInput');
-            searchInput.addEventListener('input', handleSearchInput);
-            searchInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    const firstResult = document.querySelector('.search-result-item');
-                    if (firstResult) {
-                        firstResult.click();
+            if (searchInput) {
+                searchInput.addEventListener('input', handleSearchInput);
+                searchInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        const firstResult = document.querySelector('.search-result-item');
+                        if (firstResult) {
+                            firstResult.click();
+                        }
                     }
-                }
-            });
+                });
+            }
 
             // Klick außerhalb schließt Dropdown
             document.addEventListener('click', (e) => {
@@ -2100,69 +2097,48 @@
         }
 
         function sendGroupEmail() {
-            if (!currentGroup || currentGroup.items.length === 0) return;
-            
-            const email = document.getElementById('markerEmail').value;
-            
-            // CSV-Zeilen generieren
-            let csvLines = [];
-            
-            // E-Mail Body aufbauen
-            let groupItemsText = '';
-            
-            currentGroup.items.forEach((item, index) => {
-                const typeConfig = markerTypes[item.type];
+            if (!currentGroup || currentGroup.items.length === 0) {
+                alert('⚠️ Keine Elemente im Tourpaket!');
+                return;
+            }
+
+            // Tourpaket als Vorschlag zu Firebase senden
+            const groupSuggestion = {
+                id: Date.now(),
+                name: currentGroup.name,
+                type: 'tourpaket',
+                items: currentGroup.items,
+                status: 'pending',
+                createdAt: new Date().toISOString()
+            };
+
+            if (db) {
+                db.collection('suggestions').add(groupSuggestion)
+                    .then(() => {
+                        alert('✅ Tourpaket wurde gesendet!\n\nDer Admin wird es prüfen und auf der Karte veröffentlichen.');
+                        // Gruppen-Modal schließen
+                        document.getElementById('groupOverviewModal').classList.remove('active');
+                        
+                        // Gruppe zurücksetzen
+                        currentGroup = null;
+                        groupMode = false;
+                        updateGroupUI();
+                    })
+                    .catch(error => {
+                        console.error('Fehler beim Senden:', error);
+                        alert('❌ Fehler beim Senden. Versuche es später nochmal.');
+                    });
+            } else {
+                // Offline-Fallback
+                markerSuggestions.push(groupSuggestion);
+                saveSuggestionsToStorage();
+                alert('⚠️ Offline-Modus: Tourpaket lokal gespeichert.\n\nBitte später nochmal versuchen wenn du online bist.');
                 
-                if (item.isRoute) {
-                    const pointsStr = item.points.map(p => `${p[0].toFixed(6)}/${p[1].toFixed(6)}`).join('|');
-                    csvLines.push(`${item.name},${pointsStr},${item.type},${item.difficulty},${item.description || ''}`);
-                    
-                    groupItemsText += `\n${index + 1}. ${typeConfig.icon} ${item.name} (Strecke mit ${item.points.length} Punkten)`;
-                    if (item.difficulty) groupItemsText += `\n   └ Schwierigkeit: ${getDifficultyLabel(item.difficulty)}`;
-                    if (item.description) groupItemsText += `\n   └ ${item.description}`;
-                } else {
-                    csvLines.push(`${item.name},${item.lat.toFixed(6)},${item.lng.toFixed(6)},${item.type},${item.difficulty},${item.description || ''}`);
-                    
-                    groupItemsText += `\n${index + 1}. ${typeConfig.icon} ${item.name}`;
-                    groupItemsText += `\n   └ 📍 ${item.lat.toFixed(6)}, ${item.lng.toFixed(6)}`;
-                    if (item.difficulty) groupItemsText += `\n   └ Schwierigkeit: ${getDifficultyLabel(item.difficulty)}`;
-                    if (item.description) groupItemsText += `\n   └ ${item.description}`;
-                }
-            });
-            
-            const subject = `🚵 Neues Tourpaket: ${currentGroup.name}`;
-            const body = `
-Hallo Admin,
-
-hier ist ein neues Tourpaket:
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📦 TOURPAKET: ${currentGroup.name}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📍 ELEMENTE (${currentGroup.items.length})
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${groupItemsText}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-${email ? `Kontakt: ${email}\n\n` : ''}📋 CSV-ZEILEN ZUM KOPIEREN:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${csvLines.join('\n')}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Gesendet: ${new Date().toLocaleString('de-DE')}
-            `.trim();
-
-            window.location.href = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            
-            // Gruppen-Modal schließen
-            document.getElementById('groupOverviewModal').classList.remove('active');
-            
-            // Gruppe zurücksetzen
-            currentGroup = null;
-            groupMode = false;
-            updateGroupUI();
+                document.getElementById('groupOverviewModal').classList.remove('active');
+                currentGroup = null;
+                groupMode = false;
+                updateGroupUI();
+            }
         }
 
         function sendMarkerEmail() {
@@ -2172,7 +2148,6 @@ Gesendet: ${new Date().toLocaleString('de-DE')}
             const name = document.getElementById('markerName').value.trim();
             const difficulty = document.getElementById('markerDifficulty').value;
             const description = document.getElementById('markerDescription').value;
-            const email = document.getElementById('markerEmail').value;
             const typeConfig = markerTypes[type];
 
             if (!name) {
@@ -2187,7 +2162,6 @@ Gesendet: ${new Date().toLocaleString('de-DE')}
                 type: type,
                 difficulty: difficulty,
                 description: description,
-                email: email,
                 status: 'pending',
                 createdAt: new Date().toISOString()
             };
@@ -2215,9 +2189,9 @@ Gesendet: ${new Date().toLocaleString('de-DE')}
             if (db) {
                 db.collection('suggestions').add(suggestion)
                     .then(() => {
+                        alert('✅ Dein Vorschlag wurde gesendet!\n\nDer Admin wird ihn prüfen und auf der Karte veröffentlichen.');
                         closeModal();
                         tempMarkerData = null;
-                        alert('✅ Dein Vorschlag wurde gesendet!\n\nDer Admin wird ihn prüfen und auf der Karte veröffentlichen.');
                     })
                     .catch(error => {
                         console.error('Fehler beim Senden:', error);
@@ -2227,9 +2201,9 @@ Gesendet: ${new Date().toLocaleString('de-DE')}
                 // Offline-Fallback: Lokal speichern
                 markerSuggestions.push(suggestion);
                 saveSuggestionsToStorage();
+                alert('⚠️ Offline-Modus: Vorschlag lokal gespeichert.\n\nBitte später nochmal versuchen wenn du online bist.');
                 closeModal();
                 tempMarkerData = null;
-                alert('⚠️ Offline-Modus: Vorschlag lokal gespeichert.\n\nBitte später nochmal versuchen wenn du online bist.');
             }
         }
 
@@ -2854,6 +2828,40 @@ Gesendet: ${new Date().toLocaleString('de-DE')}
             }
 
             suggestionsList.innerHTML = pendingSuggestions.map(s => {
+                // Tourpaket-Vorschlag
+                if (s.type === 'tourpaket') {
+                    return `
+                        <div class="suggestion-card">
+                            <div class="suggestion-header">
+                                <div>
+                                    <div class="suggestion-title">📦 Tourpaket: ${s.name}</div>
+                                    <div style="font-size: 0.9rem; color: #666; margin-top: 0.3rem;">
+                                        ${s.items.length} Elemente im Paket
+                                    </div>
+                                </div>
+                                <span class="suggestion-badge badge-pending">Ausstehend</span>
+                            </div>
+                            
+                            <div style="background-color: white; padding: 1rem; border-radius: 5px; margin: 1rem 0;">
+                                <strong>Enthaltene Elemente:</strong>
+                                ${s.items.map((item, idx) => {
+                                    const typeConfig = markerTypes[item.type];
+                                    const coordInfo = item.isRoute ? `${item.points.length} Wegpunkte` : `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`;
+                                    return `<div style="margin-top: 0.5rem;">${idx + 1}. ${typeConfig.icon} ${item.name} (${coordInfo})</div>`;
+                                }).join('')}
+                            </div>
+                            
+                            <p style="font-size: 0.85rem; color: #999;">Eingereicht: ${new Date(s.createdAt).toLocaleString('de-DE')}</p>
+                            
+                            <div class="suggestion-actions">
+                                <button class="btn btn-approve" onclick="approveTourpaket(${s.id})">✅ Tourpaket annehmen</button>
+                                <button class="btn btn-reject" onclick="rejectSuggestion(${s.id})">❌ Ablehnen</button>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Normaler Marker-Vorschlag
                 const typeConfig = markerTypes[s.type];
                 const coordInfo = s.isRoute ? `${s.points.length} Wegpunkte` : `${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}`;
                 
@@ -2871,7 +2879,6 @@ Gesendet: ${new Date().toLocaleString('de-DE')}
                         
                         ${s.difficulty ? `<p><strong>Schwierigkeit:</strong> ${getDifficultyLabel(s.difficulty)}</p>` : ''}
                         ${s.description ? `<p><strong>Beschreibung:</strong> ${s.description}</p>` : ''}
-                        ${s.email ? `<p><strong>Kontakt:</strong> ${s.email}</p>` : ''}
                         <p style="font-size: 0.85rem; color: #999;">Eingereicht: ${new Date(s.createdAt).toLocaleString('de-DE')}</p>
                         
                         <div class="suggestion-actions">
@@ -2946,13 +2953,79 @@ Gesendet: ${new Date().toLocaleString('de-DE')}
                     markerSuggestions = markerSuggestions.filter(s => s.id !== id);
                     updateAdminDashboard();
                     alert('✅ Vorschlag wurde angenommen und zur Karte hinzugefügt!');
+                }).catch(error => {
+                    console.error('Firebase Fehler:', error);
+                    // Trotzdem lokal entfernen
+                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
+                    updateAdminDashboard();
+                    alert('✅ Vorschlag wurde angenommen und zur Karte hinzugefügt!');
                 });
             } else {
                 // Offline-Fallback
                 suggestion.status = 'approved';
                 saveSuggestionsToStorage();
+                markerSuggestions = markerSuggestions.filter(s => s.id !== id);
                 updateAdminDashboard();
                 alert('✅ Vorschlag wurde angenommen und zur Karte hinzugefügt!');
+            }
+        }
+
+        function approveTourpaket(id) {
+            const suggestion = markerSuggestions.find(s => s.id === id);
+            if (!suggestion || suggestion.type !== 'tourpaket') return;
+
+            // Alle Elemente des Tourpakets als Marker hinzufügen
+            const groupId = Date.now();
+            const groupName = suggestion.name;
+
+            suggestion.items.forEach((item, index) => {
+                const newMarker = {
+                    id: Date.now() + index,
+                    name: item.name,
+                    type: item.type,
+                    difficulty: item.difficulty,
+                    description: item.description,
+                    groupId: groupId,
+                    groupName: groupName,
+                    createdAt: new Date().toISOString()
+                };
+
+                if (item.isRoute) {
+                    newMarker.isRoute = true;
+                    newMarker.points = item.points;
+                } else {
+                    newMarker.lat = item.lat;
+                    newMarker.lng = item.lng;
+                }
+
+                markers.push(newMarker);
+                addMarkerToMap(newMarker);
+            });
+
+            saveMarkersToStorage();
+            updateMarkerList();
+
+            // In Firebase als "approved" markieren
+            if (db && suggestion.firebaseId) {
+                db.collection('suggestions').doc(suggestion.firebaseId).update({
+                    status: 'approved'
+                }).then(() => {
+                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
+                    updateAdminDashboard();
+                    alert(`✅ Tourpaket "${groupName}" mit ${suggestion.items.length} Elementen wurde angenommen!`);
+                }).catch(error => {
+                    console.error('Firebase Fehler:', error);
+                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
+                    updateAdminDashboard();
+                    alert(`✅ Tourpaket "${groupName}" mit ${suggestion.items.length} Elementen wurde angenommen!`);
+                });
+            } else {
+                // Offline-Fallback
+                suggestion.status = 'approved';
+                saveSuggestionsToStorage();
+                markerSuggestions = markerSuggestions.filter(s => s.id !== id);
+                updateAdminDashboard();
+                alert(`✅ Tourpaket "${groupName}" mit ${suggestion.items.length} Elementen wurde angenommen!`);
             }
         }
 
@@ -2969,11 +3042,17 @@ Gesendet: ${new Date().toLocaleString('de-DE')}
                 }).then(() => {
                     markerSuggestions = markerSuggestions.filter(s => s.id !== id);
                     updateAdminDashboard();
+                }).catch(error => {
+                    console.error('Firebase Fehler:', error);
+                    // Trotzdem lokal entfernen
+                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
+                    updateAdminDashboard();
                 });
             } else {
                 // Offline-Fallback
                 suggestion.status = 'rejected';
                 saveSuggestionsToStorage();
+                markerSuggestions = markerSuggestions.filter(s => s.id !== id);
                 updateAdminDashboard();
             }
         }
