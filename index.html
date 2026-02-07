@@ -1289,14 +1289,14 @@
         // ==================== FIREBASE KONFIGURATION ====================
         // WICHTIG: Ersetze dies mit deiner eigenen Firebase Config!
         const firebaseConfig = {
-            apiKey: "DEIN-API-KEY",
-            authDomain: "dein-projekt.firebaseapp.com",
-            projectId: "dein-projekt-id",
-            storageBucket: "dein-projekt.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abc123"
-        };
-
+              apiKey: "AIzaSyBmk6-WZp4g-lPfIrZBFMGKUB5SWpEmzdE",
+              authDomain: "facharbeit-mtb-und-trails.firebaseapp.com",
+              projectId: "facharbeit-mtb-und-trails",
+              storageBucket: "facharbeit-mtb-und-trails.firebasestorage.app",
+              messagingSenderId: "639798778772",
+              appId: "1:639798778772:web:21ebded979a096873f4d81",
+              measurementId: "G-C6KBMTZY5W"
+            };
         // Firebase initialisieren
         let db = null;
         try {
@@ -1515,7 +1515,6 @@
 
         function showTypeSelectionModal() {
             document.getElementById('typeSelectionModal').classList.add('active');
-            document.getElementById('streckSubmenu').classList.remove('active');
         }
 
         function hideTypeSelectionModal() {
@@ -2117,7 +2116,17 @@
                 id: Date.now(),
                 name: currentGroup.name,
                 type: 'tourpaket',
-                items: currentGroup.items,
+                items: currentGroup.items.map(item => {
+                    // Konvertiere Points zu String für Firebase
+                    if (item.isRoute && item.points) {
+                        return {
+                            ...item,
+                            pointsString: item.points.map(p => `${p[0]},${p[1]}`).join('|'),
+                            points: null // Entferne verschachteltes Array
+                        };
+                    }
+                    return item;
+                }),
                 status: 'pending',
                 createdAt: new Date().toISOString()
             };
@@ -2187,7 +2196,8 @@
 
             if (tempMarkerData.isRoute) {
                 suggestion.isRoute = true;
-                suggestion.points = tempMarkerData.points;
+                // Konvertiere Points zu String für Firebase (keine nested arrays)
+                suggestion.pointsString = tempMarkerData.points.map(p => `${p[0]},${p[1]}`).join('|');
                 
                 // Strecken-Modus beenden und aufräumen
                 routeMode = false;
@@ -2895,7 +2905,15 @@
                                 <strong>Enthaltene Elemente:</strong>
                                 ${s.items.map((item, idx) => {
                                     const typeConfig = markerTypes[item.type];
-                                    const coordInfo = item.isRoute ? `${item.points.length} Wegpunkte` : `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`;
+                                    let coordInfo;
+                                    if (item.isRoute && item.pointsString) {
+                                        const pointCount = item.pointsString.split('|').length;
+                                        coordInfo = `${pointCount} Wegpunkte`;
+                                    } else if (item.isRoute && item.points) {
+                                        coordInfo = `${item.points.length} Wegpunkte`;
+                                    } else {
+                                        coordInfo = `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`;
+                                    }
                                     return `<div style="margin-top: 0.5rem;">${idx + 1}. ${typeConfig.icon} ${item.name} (${coordInfo})</div>`;
                                 }).join('')}
                             </div>
@@ -2912,7 +2930,15 @@
                 
                 // Normaler Marker-Vorschlag
                 const typeConfig = markerTypes[s.type];
-                const coordInfo = s.isRoute ? `${s.points.length} Wegpunkte` : `${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}`;
+                let coordInfo;
+                if (s.isRoute && s.pointsString) {
+                    const pointCount = s.pointsString.split('|').length;
+                    coordInfo = `${pointCount} Wegpunkte`;
+                } else if (s.isRoute && s.points) {
+                    coordInfo = `${s.points.length} Wegpunkte`;
+                } else {
+                    coordInfo = `${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}`;
+                }
                 
                 return `
                     <div class="suggestion-card">
@@ -2982,7 +3008,16 @@
 
             if (suggestion.isRoute) {
                 newMarker.isRoute = true;
-                newMarker.points = suggestion.points;
+                // Konvertiere pointsString zurück zu Array
+                if (suggestion.pointsString) {
+                    newMarker.points = suggestion.pointsString.split('|').map(p => {
+                        const [lat, lng] = p.split(',').map(parseFloat);
+                        return [lat, lng];
+                    });
+                } else if (suggestion.points) {
+                    // Fallback für alte Daten
+                    newMarker.points = suggestion.points;
+                }
             } else {
                 newMarker.lat = suggestion.lat;
                 newMarker.lng = suggestion.lng;
@@ -3041,7 +3076,15 @@
 
                 if (item.isRoute) {
                     newMarker.isRoute = true;
-                    newMarker.points = item.points;
+                    // Konvertiere pointsString zurück zu Array
+                    if (item.pointsString) {
+                        newMarker.points = item.pointsString.split('|').map(p => {
+                            const [lat, lng] = p.split(',').map(parseFloat);
+                            return [lat, lng];
+                        });
+                    } else if (item.points) {
+                        newMarker.points = item.points;
+                    }
                 } else {
                     newMarker.lat = item.lat;
                     newMarker.lng = item.lng;
@@ -3111,8 +3154,20 @@
             if (!suggestion) return;
 
             if (suggestion.isRoute) {
-                const bounds = L.latLngBounds(suggestion.points);
-                map.fitBounds(bounds, { padding: [50, 50] });
+                let points;
+                if (suggestion.pointsString) {
+                    points = suggestion.pointsString.split('|').map(p => {
+                        const [lat, lng] = p.split(',').map(parseFloat);
+                        return [lat, lng];
+                    });
+                } else if (suggestion.points) {
+                    points = suggestion.points;
+                }
+                
+                if (points && points.length > 0) {
+                    const bounds = L.latLngBounds(points);
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
             } else {
                 map.setView([suggestion.lat, suggestion.lng], 15);
             }
