@@ -2115,29 +2115,38 @@
             if (db) {
                 db.collection('suggestions').add(groupSuggestion)
                     .then(() => {
-                        alert('✅ Tourpaket wurde gesendet!\n\nDer Admin wird es prüfen und auf der Karte veröffentlichen.');
                         // Gruppen-Modal schließen
                         document.getElementById('groupOverviewModal').classList.remove('active');
+                        clearGroupPreview();
                         
                         // Gruppe zurücksetzen
                         currentGroup = null;
                         groupMode = false;
                         updateGroupUI();
+                        
+                        alert('✅ Tourpaket wurde gesendet!\n\nDer Admin wird es prüfen und auf der Karte veröffentlichen.');
                     })
                     .catch(error => {
                         console.error('Fehler beim Senden:', error);
-                        alert('❌ Fehler beim Senden. Versuche es später nochmal.');
+                        // Trotzdem schließen
+                        document.getElementById('groupOverviewModal').classList.remove('active');
+                        clearGroupPreview();
+                        currentGroup = null;
+                        groupMode = false;
+                        updateGroupUI();
+                        alert('❌ Fehler beim Senden. Wurde lokal gespeichert.');
                     });
             } else {
                 // Offline-Fallback
                 markerSuggestions.push(groupSuggestion);
                 saveSuggestionsToStorage();
-                alert('⚠️ Offline-Modus: Tourpaket lokal gespeichert.\n\nBitte später nochmal versuchen wenn du online bist.');
                 
                 document.getElementById('groupOverviewModal').classList.remove('active');
+                clearGroupPreview();
                 currentGroup = null;
                 groupMode = false;
                 updateGroupUI();
+                alert('⚠️ Offline-Modus: Tourpaket lokal gespeichert.\n\nBitte später nochmal versuchen wenn du online bist.');
             }
         }
 
@@ -2189,21 +2198,23 @@
             if (db) {
                 db.collection('suggestions').add(suggestion)
                     .then(() => {
-                        alert('✅ Dein Vorschlag wurde gesendet!\n\nDer Admin wird ihn prüfen und auf der Karte veröffentlichen.');
                         closeModal();
                         tempMarkerData = null;
+                        alert('✅ Dein Vorschlag wurde gesendet!\n\nDer Admin wird ihn prüfen und auf der Karte veröffentlichen.');
                     })
                     .catch(error => {
                         console.error('Fehler beim Senden:', error);
-                        alert('❌ Fehler beim Senden. Versuche es später nochmal.');
+                        closeModal();
+                        tempMarkerData = null;
+                        alert('❌ Fehler beim Senden. Wurde lokal gespeichert.');
                     });
             } else {
                 // Offline-Fallback: Lokal speichern
                 markerSuggestions.push(suggestion);
                 saveSuggestionsToStorage();
-                alert('⚠️ Offline-Modus: Vorschlag lokal gespeichert.\n\nBitte später nochmal versuchen wenn du online bist.');
                 closeModal();
                 tempMarkerData = null;
+                alert('⚠️ Offline-Modus: Vorschlag lokal gespeichert.\n\nBitte später nochmal versuchen wenn du online bist.');
             }
         }
 
@@ -2361,20 +2372,27 @@
 
         function updateMarkerList() {
             const container = document.getElementById('markerListContainer');
-            document.getElementById('markerCount').textContent = markers.length;
-
+            
             if (markers.length === 0) {
                 container.innerHTML = '<p style="color: #999; text-align: center; padding: 1rem;">Noch keine Marker</p>';
                 return;
             }
 
-            container.innerHTML = markers.map(m => {
+            // Sortiere nach Erstellungsdatum (neueste zuerst) und nimm die ersten 5
+            const recentMarkers = [...markers]
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .slice(0, 5);
+
+            container.innerHTML = recentMarkers.map(m => {
                 const t = markerTypes[m.type];
                 const coordDisplay = m.isRoute 
                     ? `${m.points.length} Wegpunkte` 
                     : `📍 ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}`;
                 
                 const groupBadge = m.groupId ? `<div class="marker-group-badge">🔗 ${m.groupName}</div>` : '';
+                
+                // Zeitstempel anzeigen
+                const timeAgo = getTimeAgo(m.createdAt);
                 
                 return `
                     <div class="marker-item" onclick="focusMarker(${m.isRoute ? 'null' : m.lat}, ${m.isRoute ? 'null' : m.lng}, ${m.isRoute}, ${m.id})">
@@ -2383,11 +2401,32 @@
                             <span class="marker-item-type">${t.icon}</span>
                         </div>
                         <div class="marker-item-coords">${coordDisplay}</div>
+                        <div style="font-size: 0.75rem; color: #999; margin-top: 0.3rem;">🕐 ${timeAgo}</div>
                         ${groupBadge}
-                        <button class="delete-marker-btn" onclick="event.stopPropagation(); deleteMarker(${m.id})" style="width: 100%; margin-top: 0.5rem;">🗑️ Löschen</button>
                     </div>
                 `;
             }).join('');
+            
+            if (markers.length > 5) {
+                container.innerHTML += `<p style="text-align: center; color: #999; font-size: 0.85rem; margin-top: 1rem;">... und ${markers.length - 5} weitere Marker</p>`;
+            }
+        }
+
+        function getTimeAgo(dateString) {
+            if (!dateString) return 'Unbekannt';
+            
+            const now = new Date();
+            const past = new Date(dateString);
+            const diffMs = now - past;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            
+            if (diffMins < 1) return 'Gerade eben';
+            if (diffMins < 60) return `vor ${diffMins} Min`;
+            if (diffHours < 24) return `vor ${diffHours} Std`;
+            if (diffDays < 7) return `vor ${diffDays} Tag${diffDays > 1 ? 'en' : ''}`;
+            return past.toLocaleDateString('de-DE');
         }
 
         function focusMarker(lat, lng, isRoute, id) {
