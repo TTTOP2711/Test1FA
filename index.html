@@ -1287,16 +1287,16 @@
     
     <script>
         // ==================== FIREBASE KONFIGURATION ====================
-        // WICHTIG: Ersetze dies mit deiner eigenen Firebase Config!
         const firebaseConfig = {
-              apiKey: "AIzaSyBmk6-WZp4g-lPfIrZBFMGKUB5SWpEmzdE",
-              authDomain: "facharbeit-mtb-und-trails.firebaseapp.com",
-              projectId: "facharbeit-mtb-und-trails",
-              storageBucket: "facharbeit-mtb-und-trails.firebasestorage.app",
-              messagingSenderId: "639798778772",
-              appId: "1:639798778772:web:21ebded979a096873f4d81",
-              measurementId: "G-C6KBMTZY5W"
-            };
+            apiKey: "AIzaSyBmk6-WZp4g-lPfIrZBFMGKUB5SWpEmzdE",
+            authDomain: "facharbeit-mtb-und-trails.firebaseapp.com",
+            projectId: "facharbeit-mtb-und-trails",
+            storageBucket: "facharbeit-mtb-und-trails.firebasestorage.app",
+            messagingSenderId: "639798778772",
+            appId: "1:639798778772:web:21ebded979a096873f4d81",
+            measurementId: "G-C6KBMTZY5W"
+        };
+
         // Firebase initialisieren
         let db = null;
         try {
@@ -3028,29 +3028,23 @@
             addMarkerToMap(newMarker);
             updateMarkerList();
 
-            // In Firebase als "approved" markieren
+            // SOFORT aus lokaler Liste entfernen (nicht auf Firebase warten)
+            markerSuggestions = markerSuggestions.filter(s => s.id !== id);
+            updateAdminDashboard(); // UI sofort aktualisieren
+            
+            alert('✅ Vorschlag wurde angenommen und zur Karte hinzugefügt!');
+
+            // In Firebase als "approved" markieren (im Hintergrund)
             if (db && suggestion.firebaseId) {
                 db.collection('suggestions').doc(suggestion.firebaseId).update({
                     status: 'approved'
-                }).then(() => {
-                    // Aus lokaler Liste entfernen
-                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
-                    updateAdminDashboard();
-                    alert('✅ Vorschlag wurde angenommen und zur Karte hinzugefügt!');
                 }).catch(error => {
-                    console.error('Firebase Fehler:', error);
-                    // Trotzdem lokal entfernen
-                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
-                    updateAdminDashboard();
-                    alert('✅ Vorschlag wurde angenommen und zur Karte hinzugefügt!');
+                    console.error('Firebase Fehler (ignoriert):', error);
                 });
             } else {
                 // Offline-Fallback
                 suggestion.status = 'approved';
                 saveSuggestionsToStorage();
-                markerSuggestions = markerSuggestions.filter(s => s.id !== id);
-                updateAdminDashboard();
-                alert('✅ Vorschlag wurde angenommen und zur Karte hinzugefügt!');
             }
         }
 
@@ -3097,27 +3091,23 @@
             saveMarkersToStorage();
             updateMarkerList();
 
-            // In Firebase als "approved" markieren
+            // SOFORT aus lokaler Liste entfernen
+            markerSuggestions = markerSuggestions.filter(s => s.id !== id);
+            updateAdminDashboard(); // UI sofort aktualisieren
+
+            alert(`✅ Tourpaket "${groupName}" mit ${suggestion.items.length} Elementen wurde angenommen!`);
+
+            // In Firebase als "approved" markieren (im Hintergrund)
             if (db && suggestion.firebaseId) {
                 db.collection('suggestions').doc(suggestion.firebaseId).update({
                     status: 'approved'
-                }).then(() => {
-                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
-                    updateAdminDashboard();
-                    alert(`✅ Tourpaket "${groupName}" mit ${suggestion.items.length} Elementen wurde angenommen!`);
                 }).catch(error => {
-                    console.error('Firebase Fehler:', error);
-                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
-                    updateAdminDashboard();
-                    alert(`✅ Tourpaket "${groupName}" mit ${suggestion.items.length} Elementen wurde angenommen!`);
+                    console.error('Firebase Fehler (ignoriert):', error);
                 });
             } else {
                 // Offline-Fallback
                 suggestion.status = 'approved';
                 saveSuggestionsToStorage();
-                markerSuggestions = markerSuggestions.filter(s => s.id !== id);
-                updateAdminDashboard();
-                alert(`✅ Tourpaket "${groupName}" mit ${suggestion.items.length} Elementen wurde angenommen!`);
             }
         }
 
@@ -3127,25 +3117,21 @@
             const suggestion = markerSuggestions.find(s => s.id === id);
             if (!suggestion) return;
 
-            // In Firebase als "rejected" markieren
+            // SOFORT aus lokaler Liste entfernen (nicht auf Firebase warten)
+            markerSuggestions = markerSuggestions.filter(s => s.id !== id);
+            updateAdminDashboard(); // UI sofort aktualisieren
+
+            // In Firebase als "rejected" markieren (im Hintergrund)
             if (db && suggestion.firebaseId) {
                 db.collection('suggestions').doc(suggestion.firebaseId).update({
                     status: 'rejected'
-                }).then(() => {
-                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
-                    updateAdminDashboard();
                 }).catch(error => {
-                    console.error('Firebase Fehler:', error);
-                    // Trotzdem lokal entfernen
-                    markerSuggestions = markerSuggestions.filter(s => s.id !== id);
-                    updateAdminDashboard();
+                    console.error('Firebase Fehler (ignoriert):', error);
                 });
             } else {
                 // Offline-Fallback
                 suggestion.status = 'rejected';
                 saveSuggestionsToStorage();
-                markerSuggestions = markerSuggestions.filter(s => s.id !== id);
-                updateAdminDashboard();
             }
         }
 
