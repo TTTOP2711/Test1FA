@@ -2065,10 +2065,7 @@
                 currentGroup.name = newName;
             }
 
-            if (!confirm(`Tourpaket "${currentGroup.name}" mit ${currentGroup.items.length} Element(en) per E-Mail senden?`)) {
-                return;
-            }
-
+            // Direkt senden ohne Email-Bestätigung
             sendGroupEmail();
         }
 
@@ -2463,10 +2460,21 @@
 
         function deleteMarker(id) {
             if (!confirm('Marker wirklich löschen?\n\n⚠️ Nur als Admin: Dies löscht den Marker dauerhaft!')) return;
+            
+            const marker = markers.find(m => m.id === id);
+            
+            // Aus lokalem Array entfernen
             markers = markers.filter(m => m.id !== id);
             saveMarkersToStorage();
             reloadMap();
             updateMarkerList();
+            
+            // Auch aus Firebase löschen!
+            if (db && marker && marker.firebaseId) {
+                db.collection('markers').doc(marker.firebaseId).delete()
+                    .then(() => console.log('✅ Marker aus Firebase gelöscht'))
+                    .catch(error => console.error('❌ Firebase Lösch-Fehler:', error));
+            }
         }
 
         function reloadMap() {
@@ -2483,10 +2491,56 @@
         }
 
         function loadMarkersFromStorage() {
+            // Erst von Firebase laden (für alle User gleich)
+            if (db) {
+                db.collection('markers')
+                    .get()
+                    .then(snapshot => {
+                        markers = [];
+                        snapshot.forEach(doc => {
+                            const data = doc.data();
+                            
+                            // Konvertiere pointsString zurück zu Array
+                            if (data.isRoute && data.pointsString) {
+                                data.points = data.pointsString.split('|').map(p => {
+                                    const [lat, lng] = p.split(',').map(parseFloat);
+                                    return [lat, lng];
+                                });
+                            }
+                            
+                            markers.push({
+                                firebaseId: doc.id,
+                                ...data
+                            });
+                        });
+                        
+                        console.log(`✅ ${markers.length} Marker von Firebase geladen`);
+                        
+                        // Marker auf Karte anzeigen
+                        markers.forEach(m => addMarkerToMap(m));
+                        updateMarkerList();
+                        
+                        // Auch lokal speichern als Backup
+                        saveMarkersToStorage();
+                    })
+                    .catch(error => {
+                        console.error('❌ Firebase Marker-Laden Fehler:', error);
+                        // Fallback: Von localStorage laden
+                        loadFromLocalStorage();
+                    });
+            } else {
+                // Offline: Von localStorage laden
+                loadFromLocalStorage();
+            }
+        }
+        
+        function loadFromLocalStorage() {
             const stored = localStorage.getItem('mtb_markers');
             if (stored) {
                 markers = JSON.parse(stored);
                 markers.forEach(m => addMarkerToMap(m));
+                updateMarkerList();
+                console.log(`📂 ${markers.length} Marker von localStorage geladen`);
             }
         }
 
@@ -3024,9 +3078,24 @@
             }
 
             markers.push(newMarker);
-            saveMarkersToStorage();
+            saveMarkersToStorage(); // Lokal speichern
             addMarkerToMap(newMarker);
             updateMarkerList();
+
+            // AUCH zu Firebase hochladen für andere User!
+            if (db) {
+                // Erstelle Firebase-kompatible Version
+                const firebaseMarker = { ...newMarker };
+                if (firebaseMarker.points) {
+                    // Konvertiere Points zu String
+                    firebaseMarker.pointsString = firebaseMarker.points.map(p => `${p[0]},${p[1]}`).join('|');
+                    delete firebaseMarker.points; // Entferne verschachteltes Array
+                }
+                
+                db.collection('markers').add(firebaseMarker)
+                    .then(() => console.log('✅ Marker zu Firebase hochgeladen'))
+                    .catch(error => console.error('❌ Firebase Marker-Upload Fehler:', error));
+            }
 
             // SOFORT aus lokaler Liste entfernen (nicht auf Firebase warten)
             markerSuggestions = markerSuggestions.filter(s => s.id !== id);
@@ -3086,6 +3155,19 @@
 
                 markers.push(newMarker);
                 addMarkerToMap(newMarker);
+                
+                // AUCH zu Firebase hochladen!
+                if (db) {
+                    const firebaseMarker = { ...newMarker };
+                    if (firebaseMarker.points) {
+                        firebaseMarker.pointsString = firebaseMarker.points.map(p => `${p[0]},${p[1]}`).join('|');
+                        delete firebaseMarker.points;
+                    }
+                    
+                    db.collection('markers').add(firebaseMarker)
+                        .then(() => console.log('✅ Tourpaket-Marker zu Firebase hochgeladen'))
+                        .catch(error => console.error('❌ Firebase Fehler:', error));
+                }
             });
 
             saveMarkersToStorage();
