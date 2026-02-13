@@ -2459,35 +2459,63 @@
         }
 
         function deleteMarker(id) {
-            if (!confirm('Marker wirklich löschen?\n\n⚠️ Nur als Admin: Dies löscht den Marker dauerhaft!')) return;
+            console.log('🗑️ deleteMarker aufgerufen für ID:', id);
+            
+            if (!confirm('Marker wirklich löschen?\n\n⚠️ Nur als Admin: Dies löscht den Marker dauerhaft!')) {
+                console.log('❌ Löschen abgebrochen');
+                return;
+            }
             
             const marker = markers.find(m => m.id === id);
+            console.log('📍 Zu löschender Marker:', marker);
+            
+            if (!marker) {
+                console.error('❌ Marker nicht gefunden!');
+                return;
+            }
             
             // SOFORT aus lokalem Array entfernen
+            const vorher = markers.length;
             markers = markers.filter(m => m.id !== id);
+            console.log(`📊 Marker Array: ${vorher} → ${markers.length}`);
             
             // Alle UIs sofort aktualisieren
             saveMarkersToStorage();
             reloadMap();
             updateMarkerList();
             
-            // Admin-Liste SOFORT aktualisieren (ohne auf Firebase zu warten)
+            // Admin-Liste SOFORT und DIREKT aktualisieren
             const adminDashboard = document.getElementById('adminDashboard');
+            const adminMarkerList = document.getElementById('adminMarkerList');
+            
+            console.log('🔍 Admin Dashboard aktiv?', adminDashboard?.classList.contains('active'));
+            console.log('🔍 Admin Marker List gefunden?', !!adminMarkerList);
+            
             if (adminDashboard && adminDashboard.classList.contains('active')) {
+                console.log('🔄 Rufe updateAdminMarkerList auf...');
                 updateAdminMarkerList();
-                console.log('✅ Admin-Liste aktualisiert');
+                console.log('✅ updateAdminMarkerList abgeschlossen');
+                
+                // FORCE UPDATE - setze totalMarkerCount nochmal
+                const countElement = document.getElementById('totalMarkerCount');
+                if (countElement) {
+                    countElement.textContent = markers.length;
+                    console.log('✅ totalMarkerCount aktualisiert:', markers.length);
+                }
             }
             
             // Auch aus Firebase löschen (im Hintergrund)
-            // Der Echtzeit-Listener wird andere User aktualisieren!
-            if (db && marker && marker.firebaseId) {
+            if (db && marker.firebaseId) {
+                console.log('🔥 Lösche aus Firebase:', marker.firebaseId);
                 db.collection('markers').doc(marker.firebaseId).delete()
                     .then(() => {
-                        console.log('✅ Marker aus Firebase gelöscht - andere User werden automatisch aktualisiert');
+                        console.log('✅ Firebase-Löschung erfolgreich');
                     })
                     .catch(error => {
                         console.error('❌ Firebase Lösch-Fehler:', error);
                     });
+            } else {
+                console.warn('⚠️ Kein Firebase ID - nur lokal gelöscht');
             }
         }
 
@@ -2507,14 +2535,22 @@
         function loadMarkersFromStorage() {
             // Erst von Firebase laden (für alle User gleich)
             if (db) {
+                console.log('🔥 Starte Firebase Echtzeit-Listener für Marker...');
+                
                 // ECHTZEIT-LISTENER: Aktualisiert automatisch bei Änderungen!
                 db.collection('markers')
                     .onSnapshot((snapshot) => {
-                        console.log('🔄 Marker-Änderung erkannt von Firebase');
+                        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                        console.log('🔄 MARKER-ÄNDERUNG ERKANNT VON FIREBASE');
+                        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                        console.log('📊 Snapshot-Größe:', snapshot.size);
+                        console.log('📊 Vorherige Marker-Anzahl:', markers.length);
+                        
                         markers = [];
                         
                         snapshot.forEach(doc => {
                             const data = doc.data();
+                            console.log('📄 Lade Marker:', doc.id, '-', data.name);
                             
                             // Konvertiere pointsString zurück zu Array
                             if (data.isRoute && data.pointsString) {
@@ -2530,25 +2566,32 @@
                             });
                         });
                         
-                        console.log(`✅ ${markers.length} Marker von Firebase geladen`);
+                        console.log('✅ Neue Marker-Anzahl:', markers.length);
+                        console.log('🔄 Aktualisiere UI...');
                         
                         // Karte komplett neu laden
                         reloadMap();
                         updateMarkerList();
                         
                         // Admin-Liste auch aktualisieren wenn offen
-                        if (document.getElementById('adminDashboard')?.classList.contains('active')) {
+                        const adminDashboard = document.getElementById('adminDashboard');
+                        if (adminDashboard && adminDashboard.classList.contains('active')) {
+                            console.log('🔄 Admin-Dashboard ist offen - aktualisiere Liste');
                             updateAdminMarkerList();
                         }
                         
                         // Auch lokal speichern als Backup
                         saveMarkersToStorage();
+                        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                     }, (error) => {
                         console.error('❌ Firebase Echtzeit-Listener Fehler:', error);
+                        console.error('❌ Error Code:', error.code);
+                        console.error('❌ Error Message:', error.message);
                         // Fallback: Von localStorage laden
                         loadFromLocalStorage();
                     });
             } else {
+                console.warn('⚠️ Kein Firebase - lade von localStorage');
                 // Offline: Von localStorage laden
                 loadFromLocalStorage();
             }
