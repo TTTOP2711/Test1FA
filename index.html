@@ -1238,6 +1238,7 @@
             <div class="admin-tabs">
                 <button class="admin-tab active" onclick="switchAdminTab('suggestions')">📨 Vorschläge (<span id="suggestionCount">0</span>)</button>
                 <button class="admin-tab" onclick="switchAdminTab('markers')">📍 Alle Marker</button>
+                <button class="admin-tab" onclick="switchAdminTab('stats')">📊 Statistiken</button>
                 <button class="admin-tab" onclick="switchAdminTab('backup')">💾 Backup</button>
             </div>
 
@@ -1255,6 +1256,62 @@
                 <p style="margin-bottom: 1rem;">Gesamt: <strong><span id="totalMarkerCount">0</span></strong> Marker</p>
                 <div id="adminMarkerList" style="max-height: 600px; overflow-y: auto;">
                     <!-- Wird dynamisch befüllt -->
+                </div>
+            </div>
+
+            <!-- Tab: Statistiken -->
+            <div class="admin-tab-content" id="tab-stats">
+                <h3>📊 Website-Statistiken</h3>
+                
+                <div style="background-color: var(--light-beige); padding: 2rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <h4 style="margin-top: 0; color: var(--primary-green);">👥 Besucher</h4>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1.5rem;">
+                        <div>
+                            <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Gesamte Seitenaufrufe:</p>
+                            <p style="font-size: 3rem; font-weight: bold; color: var(--primary-green); margin: 0;">
+                                <span id="pageviewCount">0</span>
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Letzter Besuch:</p>
+                            <p style="font-size: 1.2rem; font-weight: 600; color: var(--accent-orange); margin-top: 1rem;">
+                                <span id="lastVisit">Noch keine Besuche</span>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <p style="font-size: 0.85rem; color: #999; margin-top: 1.5rem; border-top: 1px solid #ddd; padding-top: 1rem;">
+                        💡 Hinweis: Jeder Browser-Tab zählt nur 1x pro Session (bis Browser geschlossen wird)
+                    </p>
+                </div>
+
+                <div style="background-color: var(--light-beige); padding: 2rem; border-radius: 8px;">
+                    <h4 style="margin-top: 0; color: var(--primary-green);">📍 Content-Statistiken</h4>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 1.5rem;">
+                        <div style="text-align: center; padding: 1rem; background: white; border-radius: 8px;">
+                            <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Veröffentlichte Marker</p>
+                            <p style="font-size: 2rem; font-weight: bold; color: var(--secondary-green); margin: 0;">
+                                <span id="statsMarkerCount">0</span>
+                            </p>
+                        </div>
+                        
+                        <div style="text-align: center; padding: 1rem; background: white; border-radius: 8px;">
+                            <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Wartende Vorschläge</p>
+                            <p style="font-size: 2rem; font-weight: bold; color: var(--accent-orange); margin: 0;">
+                                <span id="statsSuggestionCount">0</span>
+                            </p>
+                        </div>
+                        
+                        <div style="text-align: center; padding: 1rem; background: white; border-radius: 8px;">
+                            <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Tourpakete</p>
+                            <p style="font-size: 2rem; font-weight: bold; color: #3b82f6; margin: 0;">
+                                <span id="statsTourpaketCount">0</span>
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1381,6 +1438,9 @@
                 loadMarkersFromStorage();
                 setupEventListeners();
                 updateMarkerList();
+                
+                // Besucher-Zähler erhöhen
+                trackPageView();
                 
                 // Admin-Code-Eingabe mit Enter
                 const adminCodeInput = document.getElementById('adminCodeInput');
@@ -2972,6 +3032,7 @@
             loadSuggestionsFromStorage();
             document.getElementById('adminDashboard').classList.add('active');
             updateAdminDashboard();
+            loadPageViewStats(); // Lade Besucher-Statistiken
         }
 
         function closeAdminDashboard() {
@@ -2988,6 +3049,14 @@
             
             if (tabName === 'markers') {
                 updateAdminMarkerList();
+            } else if (tabName === 'stats') {
+                // Content-Statistiken aktualisieren
+                document.getElementById('statsMarkerCount').textContent = markers.length;
+                document.getElementById('statsSuggestionCount').textContent = markerSuggestions.filter(s => s.status === 'pending').length;
+                
+                // Tourpakete zählen (Marker mit groupId)
+                const uniqueGroups = new Set(markers.filter(m => m.groupId).map(m => m.groupId));
+                document.getElementById('statsTourpaketCount').textContent = uniqueGroups.size;
             }
         }
 
@@ -3468,6 +3537,67 @@
             };
             reader.readAsText(file);
             fileInput.value = '';
+        }
+
+        // ==================== BESUCHER-TRACKING ====================
+        
+        function trackPageView() {
+            if (!db) {
+                console.log('⚠️ Kein Firebase - Besucher-Tracking übersprungen');
+                return;
+            }
+
+            // Prüfe ob dieser Besuch bereits gezählt wurde (in dieser Session)
+            const hasVisited = sessionStorage.getItem('mtb_visited');
+            
+            if (hasVisited) {
+                console.log('✅ Besucher bereits in dieser Session gezählt');
+                return;
+            }
+
+            // Markiere als besucht in dieser Session
+            sessionStorage.setItem('mtb_visited', 'true');
+
+            const statsRef = db.collection('stats').doc('pageviews');
+            
+            // Verwende Firebase increment() um Zähler zu erhöhen
+            statsRef.set({
+                count: firebase.firestore.FieldValue.increment(1),
+                lastVisit: new Date().toISOString()
+            }, { merge: true })
+                .then(() => {
+                    console.log('✅ Seitenaufruf gezählt');
+                })
+                .catch(error => {
+                    console.error('❌ Besucher-Tracking Fehler:', error);
+                });
+        }
+
+        function loadPageViewStats() {
+            if (!db) {
+                document.getElementById('pageviewCount').textContent = '0';
+                return;
+            }
+
+            db.collection('stats').doc('pageviews')
+                .onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        const count = data.count || 0;
+                        document.getElementById('pageviewCount').textContent = count.toLocaleString('de-DE');
+                        
+                        // Letzter Besuch anzeigen
+                        if (data.lastVisit) {
+                            const lastVisit = new Date(data.lastVisit);
+                            document.getElementById('lastVisit').textContent = lastVisit.toLocaleString('de-DE');
+                        }
+                    } else {
+                        document.getElementById('pageviewCount').textContent = '0';
+                    }
+                }, (error) => {
+                    console.error('❌ Fehler beim Laden der Stats:', error);
+                    document.getElementById('pageviewCount').textContent = '?';
+                });
         }
     </script>
 </body>
