@@ -2463,17 +2463,31 @@
             
             const marker = markers.find(m => m.id === id);
             
-            // Aus lokalem Array entfernen
+            // SOFORT aus lokalem Array entfernen
             markers = markers.filter(m => m.id !== id);
+            
+            // Alle UIs sofort aktualisieren
             saveMarkersToStorage();
             reloadMap();
             updateMarkerList();
             
-            // Auch aus Firebase löschen!
+            // Admin-Liste SOFORT aktualisieren (ohne auf Firebase zu warten)
+            const adminDashboard = document.getElementById('adminDashboard');
+            if (adminDashboard && adminDashboard.classList.contains('active')) {
+                updateAdminMarkerList();
+                console.log('✅ Admin-Liste aktualisiert');
+            }
+            
+            // Auch aus Firebase löschen (im Hintergrund)
+            // Der Echtzeit-Listener wird andere User aktualisieren!
             if (db && marker && marker.firebaseId) {
                 db.collection('markers').doc(marker.firebaseId).delete()
-                    .then(() => console.log('✅ Marker aus Firebase gelöscht'))
-                    .catch(error => console.error('❌ Firebase Lösch-Fehler:', error));
+                    .then(() => {
+                        console.log('✅ Marker aus Firebase gelöscht - andere User werden automatisch aktualisiert');
+                    })
+                    .catch(error => {
+                        console.error('❌ Firebase Lösch-Fehler:', error);
+                    });
             }
         }
 
@@ -2493,10 +2507,12 @@
         function loadMarkersFromStorage() {
             // Erst von Firebase laden (für alle User gleich)
             if (db) {
+                // ECHTZEIT-LISTENER: Aktualisiert automatisch bei Änderungen!
                 db.collection('markers')
-                    .get()
-                    .then(snapshot => {
+                    .onSnapshot((snapshot) => {
+                        console.log('🔄 Marker-Änderung erkannt von Firebase');
                         markers = [];
+                        
                         snapshot.forEach(doc => {
                             const data = doc.data();
                             
@@ -2516,15 +2532,19 @@
                         
                         console.log(`✅ ${markers.length} Marker von Firebase geladen`);
                         
-                        // Marker auf Karte anzeigen
-                        markers.forEach(m => addMarkerToMap(m));
+                        // Karte komplett neu laden
+                        reloadMap();
                         updateMarkerList();
+                        
+                        // Admin-Liste auch aktualisieren wenn offen
+                        if (document.getElementById('adminDashboard')?.classList.contains('active')) {
+                            updateAdminMarkerList();
+                        }
                         
                         // Auch lokal speichern als Backup
                         saveMarkersToStorage();
-                    })
-                    .catch(error => {
-                        console.error('❌ Firebase Marker-Laden Fehler:', error);
+                    }, (error) => {
+                        console.error('❌ Firebase Echtzeit-Listener Fehler:', error);
                         // Fallback: Von localStorage laden
                         loadFromLocalStorage();
                     });
@@ -3260,21 +3280,25 @@
                 return;
             }
 
-            // Von Firebase laden
+            // ECHTZEIT-LISTENER für Vorschläge
             db.collection('suggestions')
                 .where('status', '==', 'pending')
-                .get()
-                .then(snapshot => {
+                .onSnapshot((snapshot) => {
+                    console.log('🔄 Vorschläge-Änderung erkannt von Firebase');
                     markerSuggestions = [];
+                    
                     snapshot.forEach(doc => {
                         markerSuggestions.push({
                             firebaseId: doc.id,
                             ...doc.data()
                         });
                     });
-                    updateAdminDashboard();
-                })
-                .catch(error => {
+                    
+                    // Admin-Dashboard aktualisieren wenn offen
+                    if (document.getElementById('adminDashboard')?.classList.contains('active')) {
+                        updateAdminDashboard();
+                    }
+                }, (error) => {
                     console.error('Fehler beim Laden der Vorschläge:', error);
                     // Fallback: localStorage
                     const stored = localStorage.getItem('mtb_suggestions');
