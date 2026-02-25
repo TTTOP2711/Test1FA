@@ -2191,6 +2191,9 @@
             if (db) {
                 db.collection('suggestions').add(groupSuggestion)
                     .then(() => {
+                        // Admin benachrichtigen
+                        sendTourpaketNotification(groupSuggestion);
+                        
                         // Gruppen-Modal schließen
                         document.getElementById('groupOverviewModal').classList.remove('active');
                         clearGroupPreview();
@@ -2278,6 +2281,9 @@
                         closeModal();
                         tempMarkerData = null;
                         alert('✅ Dein Vorschlag wurde gesendet!\n\nDer Admin wird ihn prüfen und auf der Karte veröffentlichen.');
+                        
+                        // Admin per Email benachrichtigen
+                        sendAdminNotification(suggestion);
                     })
                     .catch(error => {
                         console.error('Fehler beim Senden:', error);
@@ -2292,6 +2298,71 @@
                 closeModal();
                 tempMarkerData = null;
                 alert('⚠️ Offline-Modus: Vorschlag lokal gespeichert.\n\nBitte später nochmal versuchen wenn du online bist.');
+            }
+        }
+
+        function sendAdminNotification(suggestion) {
+            // Erstelle Email-Link
+            const typeConfig = markerTypes[suggestion.type];
+            const subject = encodeURIComponent(`🔔 Neuer Marker-Vorschlag: ${suggestion.name}`);
+            
+            let body = `Hallo Admin,\n\n`;
+            body += `Ein neuer Marker-Vorschlag wurde eingereicht:\n\n`;
+            body += `📍 Name: ${suggestion.name}\n`;
+            body += `🏷️ Typ: ${typeConfig.name} ${typeConfig.icon}\n`;
+            
+            if (suggestion.isRoute) {
+                const pointCount = suggestion.pointsString ? suggestion.pointsString.split('|').length : 0;
+                body += `🚵 Strecke mit ${pointCount} Wegpunkten\n`;
+            } else {
+                body += `📍 Koordinaten: ${suggestion.lat}, ${suggestion.lng}\n`;
+            }
+            
+            if (suggestion.difficulty) {
+                body += `⚡ Schwierigkeit: ${getDifficultyLabel(suggestion.difficulty)}\n`;
+            }
+            
+            if (suggestion.description) {
+                body += `📝 Beschreibung: ${suggestion.description}\n`;
+            }
+            
+            body += `\n📅 Eingereicht: ${new Date(suggestion.createdAt).toLocaleString('de-DE')}\n\n`;
+            body += `Bitte prüfe den Vorschlag im Admin-Bereich deiner Website.\n\n`;
+            body += `Deine MTB-Trails Plattform`;
+            
+            const mailtoLink = `mailto:${ADMIN_EMAIL}?subject=${subject}&body=${encodeURIComponent(body)}`;
+            
+            // Öffne Email-Client (nur wenn ADMIN_EMAIL gesetzt ist)
+            if (ADMIN_EMAIL && ADMIN_EMAIL !== '') {
+                console.log('📧 Email-Benachrichtigung vorbereitet für:', ADMIN_EMAIL);
+                // Öffne mailto in neuem kleinen Fenster (weniger störend)
+                window.open(mailtoLink, '_blank', 'width=600,height=400');
+            }
+        }
+
+        function sendTourpaketNotification(tourpaket) {
+            const subject = encodeURIComponent(`🔔 Neues Tourpaket: ${tourpaket.name}`);
+            
+            let body = `Hallo Admin,\n\n`;
+            body += `Ein neues Tourpaket wurde eingereicht:\n\n`;
+            body += `📦 Name: ${tourpaket.name}\n`;
+            body += `📍 Anzahl Elemente: ${tourpaket.items.length}\n\n`;
+            body += `Enthaltene Elemente:\n`;
+            
+            tourpaket.items.forEach((item, idx) => {
+                const typeConfig = markerTypes[item.type];
+                body += `${idx + 1}. ${typeConfig.icon} ${item.name}\n`;
+            });
+            
+            body += `\n📅 Eingereicht: ${new Date(tourpaket.createdAt).toLocaleString('de-DE')}\n\n`;
+            body += `Bitte prüfe das Tourpaket im Admin-Bereich deiner Website.\n\n`;
+            body += `Deine MTB-Trails Plattform`;
+            
+            const mailtoLink = `mailto:${ADMIN_EMAIL}?subject=${subject}&body=${encodeURIComponent(body)}`;
+            
+            if (ADMIN_EMAIL && ADMIN_EMAIL !== '') {
+                console.log('📧 Tourpaket-Benachrichtigung vorbereitet');
+                window.open(mailtoLink, '_blank', 'width=600,height=400');
             }
         }
 
@@ -3100,14 +3171,23 @@
                                     } else {
                                         coordInfo = `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`;
                                     }
-                                    return `<div style="margin-top: 0.5rem;">${idx + 1}. ${typeConfig.icon} ${item.name} (${coordInfo})</div>`;
+                                    return `
+                                        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" id="touritem_${s.id}_${idx}" checked style="cursor: pointer;">
+                                            <label for="touritem_${s.id}_${idx}" style="cursor: pointer; flex: 1;">
+                                                ${idx + 1}. ${typeConfig.icon} ${item.name} (${coordInfo})
+                                            </label>
+                                        </div>
+                                    `;
                                 }).join('')}
                             </div>
                             
                             <p style="font-size: 0.85rem; color: #999;">Eingereicht: ${new Date(s.createdAt).toLocaleString('de-DE')}</p>
                             
                             <div class="suggestion-actions">
-                                <button class="btn btn-approve" onclick="approveTourpaket(${s.id})">✅ Tourpaket annehmen</button>
+                                <button class="btn btn-secondary" onclick="previewTourpaket(${s.id})">👁️ Auf Karte zeigen</button>
+                                <button class="btn btn-approve" onclick="approveSelectedTourItems(${s.id})">✅ Auswahl annehmen</button>
+                                <button class="btn btn-approve" onclick="approveTourpaket(${s.id})">✅ Alles annehmen</button>
                                 <button class="btn btn-reject" onclick="rejectSuggestion(${s.id})">❌ Ablehnen</button>
                             </div>
                         </div>
@@ -3323,6 +3403,124 @@
                 suggestion.status = 'approved';
                 saveSuggestionsToStorage();
             }
+        }
+
+        function approveSelectedTourItems(id) {
+            const suggestion = markerSuggestions.find(s => s.id === id);
+            if (!suggestion || suggestion.type !== 'tourpaket') return;
+
+            // Sammle ausgewählte Items
+            const selectedItems = [];
+            suggestion.items.forEach((item, idx) => {
+                const checkbox = document.getElementById(`touritem_${id}_${idx}`);
+                if (checkbox && checkbox.checked) {
+                    selectedItems.push(item);
+                }
+            });
+
+            if (selectedItems.length === 0) {
+                alert('⚠️ Keine Elemente ausgewählt!');
+                return;
+            }
+
+            // Alle ausgewählten Elemente als Marker hinzufügen
+            const groupId = Date.now();
+            const groupName = suggestion.name;
+
+            selectedItems.forEach((item, index) => {
+                const newMarker = {
+                    id: Date.now() + index,
+                    name: item.name,
+                    type: item.type,
+                    difficulty: item.difficulty,
+                    description: item.description,
+                    groupId: groupId,
+                    groupName: groupName,
+                    createdAt: new Date().toISOString()
+                };
+
+                if (item.isRoute) {
+                    newMarker.isRoute = true;
+                    if (item.pointsString) {
+                        newMarker.points = item.pointsString.split('|').map(p => {
+                            const [lat, lng] = p.split(',').map(parseFloat);
+                            return [lat, lng];
+                        });
+                    } else if (item.points) {
+                        newMarker.points = item.points;
+                    }
+                } else {
+                    newMarker.lat = item.lat;
+                    newMarker.lng = item.lng;
+                }
+
+                markers.push(newMarker);
+                addMarkerToMap(newMarker);
+                
+                // Zu Firebase hochladen
+                if (db) {
+                    const firebaseMarker = { ...newMarker };
+                    if (firebaseMarker.points) {
+                        firebaseMarker.pointsString = firebaseMarker.points.map(p => `${p[0]},${p[1]}`).join('|');
+                        delete firebaseMarker.points;
+                    }
+                    
+                    db.collection('markers').add(firebaseMarker)
+                        .then(() => console.log('✅ Ausgewählter Marker zu Firebase hochgeladen'))
+                        .catch(error => console.error('❌ Firebase Fehler:', error));
+                }
+            });
+
+            saveMarkersToStorage();
+            updateMarkerList();
+
+            // SOFORT aus lokaler Liste entfernen
+            markerSuggestions = markerSuggestions.filter(s => s.id !== id);
+            updateAdminDashboard();
+
+            alert(`✅ ${selectedItems.length} von ${suggestion.items.length} Elementen aus "${groupName}" wurden angenommen!`);
+
+            // In Firebase als "approved" markieren
+            if (db && suggestion.firebaseId) {
+                db.collection('suggestions').doc(suggestion.firebaseId).update({
+                    status: 'approved'
+                }).catch(error => console.error('Firebase Fehler (ignoriert):', error));
+            } else {
+                suggestion.status = 'approved';
+                saveSuggestionsToStorage();
+            }
+        }
+
+        function previewTourpaket(id) {
+            const suggestion = markerSuggestions.find(s => s.id === id);
+            if (!suggestion || suggestion.type !== 'tourpaket') return;
+
+            // Sammle alle Koordinaten
+            const allCoords = [];
+            
+            suggestion.items.forEach(item => {
+                if (item.isRoute) {
+                    let points;
+                    if (item.pointsString) {
+                        points = item.pointsString.split('|').map(p => {
+                            const [lat, lng] = p.split(',').map(parseFloat);
+                            return [lat, lng];
+                        });
+                    } else if (item.points) {
+                        points = item.points;
+                    }
+                    if (points) allCoords.push(...points);
+                } else {
+                    allCoords.push([item.lat, item.lng]);
+                }
+            });
+
+            if (allCoords.length > 0) {
+                const bounds = L.latLngBounds(allCoords);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+            closeAdminDashboard();
         }
 
         function rejectSuggestion(id) {
