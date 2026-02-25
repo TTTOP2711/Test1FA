@@ -2580,6 +2580,16 @@
             return labels[d] || d;
         }
 
+        function getDifficultyColor(d) {
+            const colors = { 
+                easy: '#22c55e',    // Grün
+                medium: '#3b82f6',  // Blau
+                hard: '#dc2626',    // Rot
+                extreme: '#1f2937'  // Schwarz
+            };
+            return colors[d] || '#6b7280'; // Grau als Standard
+        }
+
         function updateMarkerList() {
             const container = document.getElementById('markerListContainer');
             
