@@ -317,6 +317,26 @@
             }
         }
 
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateX(-50%) translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
         /* Route Info Box auf Karte */
         .route-info-overlay {
             position: absolute;
@@ -1176,6 +1196,24 @@
                 <div class="form-group">
                     <label for="markerDescription">Beschreibung</label>
                     <textarea id="markerDescription" rows="3" placeholder="Beschreibe die Strecke..." autocomplete="off"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="markerAddress">
+                        Adresse (optional)
+                        <button type="button" onclick="getCurrentAddress()" style="margin-left: 0.5rem; padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--secondary-green); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            📍 Automatisch ermitteln
+                        </button>
+                    </label>
+                    <input type="text" id="markerAddress" placeholder="z.B. Waldstraße 12, 12345 Berlin" autocomplete="off">
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+                        <input type="text" id="markerStreet" placeholder="Straße + Nr." autocomplete="off">
+                        <input type="text" id="markerPostcode" placeholder="PLZ" autocomplete="off">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+                        <input type="text" id="markerCity" placeholder="Stadt/Ort" autocomplete="off">
+                        <input type="text" id="markerCountry" placeholder="Land" value="Deutschland" autocomplete="off">
+                    </div>
                 </div>
 
                 <div class="form-buttons">
@@ -2243,6 +2281,13 @@
                 return;
             }
 
+            // Adress-Daten sammeln
+            const address = document.getElementById('markerAddress').value.trim();
+            const street = document.getElementById('markerStreet').value.trim();
+            const postcode = document.getElementById('markerPostcode').value.trim();
+            const city = document.getElementById('markerCity').value.trim();
+            const country = document.getElementById('markerCountry').value.trim();
+
             // Vorschlag erstellen
             const suggestion = {
                 id: Date.now(),
@@ -2253,6 +2298,17 @@
                 status: 'pending',
                 createdAt: new Date().toISOString()
             };
+
+            // Adresse hinzufügen wenn vorhanden
+            if (address || street || city) {
+                suggestion.address = {
+                    full: address,
+                    street: street,
+                    postcode: postcode,
+                    city: city,
+                    country: country
+                };
+            }
 
             if (tempMarkerData.isRoute) {
                 suggestion.isRoute = true;
@@ -3220,6 +3276,7 @@
                         
                         ${s.difficulty ? `<p><strong>Schwierigkeit:</strong> ${getDifficultyLabel(s.difficulty)}</p>` : ''}
                         ${s.description ? `<p><strong>Beschreibung:</strong> ${s.description}</p>` : ''}
+                        ${s.address && s.address.full ? `<p><strong>📍 Adresse:</strong> ${s.address.full}</p>` : ''}
                         <p style="font-size: 0.85rem; color: #999;">Eingereicht: ${new Date(s.createdAt).toLocaleString('de-DE')}</p>
                         
                         <div class="suggestion-actions">
@@ -3547,9 +3604,16 @@
             }
         }
 
+        // Variable für temporäre Vorschau-Marker
+        let previewMarker = null;
+        let previewPolyline = null;
+
         function previewSuggestion(id) {
             const suggestion = markerSuggestions.find(s => s.id === id);
             if (!suggestion) return;
+
+            // Entferne alte Vorschau
+            clearPreviewMarkers();
 
             if (suggestion.isRoute) {
                 let points;
@@ -3563,14 +3627,148 @@
                 }
                 
                 if (points && points.length > 0) {
-                    const bounds = L.latLngBounds(points);
-                    map.fitBounds(bounds, { padding: [50, 50] });
+                    // Zeige Strecke als temporäre Linie
+                    const typeConfig = markerTypes[suggestion.type];
+                    const color = getDifficultyColor(suggestion.difficulty);
+                    
+                    previewPolyline = L.polyline(points, {
+                        color: color,
+                        weight: 6,
+                        opacity: 0.8,
+                        dashArray: '10, 10' // Gestrichelt für Vorschau
+                    }).addTo(map);
+                    
+                    // Popup an Linie
+                    previewPolyline.bindPopup(`
+                        <strong>VORSCHAU: ${suggestion.name}</strong><br>
+                        ${typeConfig.icon} ${typeConfig.name}<br>
+                        ${points.length} Wegpunkte
+                    `).openPopup();
+                    
+                    map.fitBounds(points, { padding: [50, 50] });
                 }
             } else {
+                // Zeige temporären Marker
+                const typeConfig = markerTypes[suggestion.type];
+                const icon = L.divIcon({
+                    html: `<div style="font-size: 30px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); animation: pulse 1s infinite;">${typeConfig.icon}</div>`,
+                    className: 'custom-icon',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                previewMarker = L.marker([suggestion.lat, suggestion.lng], { icon: icon }).addTo(map);
+                
+                previewMarker.bindPopup(`
+                    <strong>VORSCHAU: ${suggestion.name}</strong><br>
+                    ${typeConfig.icon} ${typeConfig.name}<br>
+                    ${suggestion.difficulty ? getDifficultyLabel(suggestion.difficulty) : ''}
+                `).openPopup();
+                
                 map.setView([suggestion.lat, suggestion.lng], 15);
             }
 
-            closeAdminDashboard();
+            // NICHT Admin-Dashboard schließen! Nur minimieren
+            const dashboard = document.getElementById('adminDashboard');
+            dashboard.style.opacity = '0.3';
+            dashboard.style.pointerEvents = 'none';
+            
+            // Info-Banner zeigen
+            showPreviewBanner();
+        }
+
+        function clearPreviewMarkers() {
+            if (previewMarker) {
+                map.removeLayer(previewMarker);
+                previewMarker = null;
+            }
+            if (previewPolyline) {
+                map.removeLayer(previewPolyline);
+                previewPolyline = null;
+            }
+            
+            // Admin-Dashboard wieder normal
+            const dashboard = document.getElementById('adminDashboard');
+            if (dashboard) {
+                dashboard.style.opacity = '1';
+                dashboard.style.pointerEvents = 'auto';
+            }
+            
+            hidePreviewBanner();
+        }
+
+        function showPreviewBanner() {
+            let banner = document.getElementById('previewBanner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'previewBanner';
+                banner.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: var(--accent-orange);
+                    color: white;
+                    padding: 1rem 2rem;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                    z-index: 9999;
+                    font-weight: bold;
+                    animation: slideDown 0.3s ease;
+                `;
+                banner.innerHTML = `
+                    👁️ VORSCHAU-MODUS
+                    <button onclick="clearPreviewMarkers()" style="margin-left: 1rem; padding: 0.5rem 1rem; background: white; color: var(--accent-orange); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        ✕ Vorschau beenden
+                    </button>
+                `;
+                document.body.appendChild(banner);
+            }
+        }
+
+        function hidePreviewBanner() {
+            const banner = document.getElementById('previewBanner');
+            if (banner) {
+                banner.remove();
+            }
+        }
+
+        // Automatische Adress-Ermittlung via Reverse Geocoding
+        function getCurrentAddress() {
+            if (!tempMarkerData) return;
+            
+            const lat = tempMarkerData.isRoute ? tempMarkerData.points[0][0] : tempMarkerData.lat;
+            const lng = tempMarkerData.isRoute ? tempMarkerData.points[0][1] : tempMarkerData.lng;
+            
+            // Nominatim Reverse Geocoding
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.address) {
+                        const addr = data.address;
+                        
+                        // Fülle Felder automatisch
+                        const street = (addr.road || '') + (addr.house_number ? ' ' + addr.house_number : '');
+                        const postcode = addr.postcode || '';
+                        const city = addr.city || addr.town || addr.village || '';
+                        const country = addr.country || 'Deutschland';
+                        
+                        document.getElementById('markerStreet').value = street;
+                        document.getElementById('markerPostcode').value = postcode;
+                        document.getElementById('markerCity').value = city;
+                        document.getElementById('markerCountry').value = country;
+                        
+                        // Zusammengesetzte Adresse
+                        const fullAddress = [street, postcode + ' ' + city, country].filter(Boolean).join(', ');
+                        document.getElementById('markerAddress').value = fullAddress;
+                        
+                        console.log('✅ Adresse ermittelt:', fullAddress);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Fehler bei Adress-Ermittlung:', error);
+                    alert('⚠️ Adresse konnte nicht automatisch ermittelt werden. Bitte manuell eingeben.');
+                });
         }
 
         function saveSuggestionsToStorage() {
