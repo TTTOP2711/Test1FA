@@ -3203,7 +3203,7 @@
                 // Tourpaket-Vorschlag
                 if (s.type === 'tourpaket') {
                     return `
-                        <div class="suggestion-card">
+                        <div class="suggestion-card" style="border: 2px solid var(--accent-orange);">
                             <div class="suggestion-header">
                                 <div>
                                     <div class="suggestion-title">📦 Tourpaket: ${s.name}</div>
@@ -3214,8 +3214,11 @@
                                 <span class="suggestion-badge badge-pending">Ausstehend</span>
                             </div>
                             
-                            <div style="background-color: white; padding: 1rem; border-radius: 5px; margin: 1rem 0;">
-                                <strong>Enthaltene Elemente:</strong>
+                            <p style="font-size: 0.85rem; color: #999; margin: 0.5rem 0;">Eingereicht: ${new Date(s.createdAt).toLocaleString('de-DE')}</p>
+                            
+                            <div style="margin-top: 1rem;">
+                                <strong style="display: block; margin-bottom: 1rem;">Enthaltene Elemente:</strong>
+                                
                                 ${s.items.map((item, idx) => {
                                     const typeConfig = markerTypes[item.type];
                                     let coordInfo;
@@ -3225,26 +3228,56 @@
                                     } else if (item.isRoute && item.points) {
                                         coordInfo = `${item.points.length} Wegpunkte`;
                                     } else {
-                                        coordInfo = `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`;
+                                        coordInfo = `📍 ${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`;
                                     }
+                                    
                                     return `
-                                        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                                            <input type="checkbox" id="touritem_${s.id}_${idx}" checked style="cursor: pointer;">
-                                            <label for="touritem_${s.id}_${idx}" style="cursor: pointer; flex: 1;">
-                                                ${idx + 1}. ${typeConfig.icon} ${item.name} (${coordInfo})
-                                            </label>
+                                        <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                                <div>
+                                                    <strong style="font-size: 1.1rem;">${typeConfig.icon} ${item.name}</strong>
+                                                    <div style="font-size: 0.9rem; color: #666; margin-top: 0.3rem;">
+                                                        ${typeConfig.name} • ${coordInfo}
+                                                    </div>
+                                                </div>
+                                                <span style="background: var(--light-beige); padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">
+                                                    #${idx + 1}
+                                                </span>
+                                            </div>
+                                            
+                                            ${item.difficulty ? `<p style="margin: 0.5rem 0;"><strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}</p>` : ''}
+                                            ${item.description ? `<p style="margin: 0.5rem 0;"><strong>Beschreibung:</strong> ${item.description}</p>` : ''}
+                                            ${item.address && item.address.full ? `<p style="margin: 0.5rem 0;"><strong>📍 Adresse:</strong> ${item.address.full}</p>` : ''}
+                                            
+                                            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                                                <button class="btn btn-approve" onclick="approveTourpaketItem(${s.id}, ${idx})" style="flex: 1;">
+                                                    ✅ Annehmen
+                                                </button>
+                                                <button class="btn btn-reject" onclick="rejectTourpaketItem(${s.id}, ${idx})" style="flex: 1;">
+                                                    ❌ Ablehnen
+                                                </button>
+                                                <button class="btn btn-secondary" onclick="previewTourpaketItem(${s.id}, ${idx})" style="flex: 0.8;">
+                                                    👁️ Vorschau
+                                                </button>
+                                            </div>
                                         </div>
                                     `;
                                 }).join('')}
                             </div>
                             
-                            <p style="font-size: 0.85rem; color: #999;">Eingereicht: ${new Date(s.createdAt).toLocaleString('de-DE')}</p>
-                            
-                            <div class="suggestion-actions">
-                                <button class="btn btn-secondary" onclick="previewTourpaket(${s.id})">👁️ Auf Karte zeigen</button>
-                                <button class="btn btn-approve" onclick="approveSelectedTourItems(${s.id})">✅ Auswahl annehmen</button>
-                                <button class="btn btn-approve" onclick="approveTourpaket(${s.id})">✅ Alles annehmen</button>
-                                <button class="btn btn-reject" onclick="rejectSuggestion(${s.id})">❌ Ablehnen</button>
+                            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid #ddd;">
+                                <strong style="display: block; margin-bottom: 0.5rem;">Gesamtes Tourpaket:</strong>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn btn-secondary" onclick="previewTourpaket(${s.id})" style="flex: 1;">
+                                        👁️ Alle auf Karte zeigen
+                                    </button>
+                                    <button class="btn btn-approve" onclick="approveTourpaket(${s.id})" style="flex: 1;">
+                                        ✅ Alles annehmen
+                                    </button>
+                                    <button class="btn btn-reject" onclick="rejectSuggestion(${s.id})" style="flex: 1;">
+                                        ❌ Alles ablehnen
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -3578,6 +3611,241 @@
             }
 
             closeAdminDashboard();
+            
+            // Banner mit Tourpaket-Info
+            let banner = document.getElementById('previewBanner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'previewBanner';
+                banner.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: var(--accent-orange);
+                    color: white;
+                    padding: 1rem 2rem;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                    z-index: 9999;
+                    font-weight: bold;
+                    animation: slideDown 0.3s ease;
+                `;
+                document.body.appendChild(banner);
+            }
+            
+            banner.innerHTML = `
+                <span>👁️ VORSCHAU TOURPAKET: ${suggestion.name} (${suggestion.items.length} Elemente)</span>
+                <button onclick="returnToAdmin()" style="margin-left: 1rem; padding: 0.5rem 1rem; background: white; color: var(--accent-orange); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    ← Zurück zum Admin
+                </button>
+            `;
+        }
+
+        function previewTourpaketItem(tourpaketId, itemIdx) {
+            const suggestion = markerSuggestions.find(s => s.id === tourpaketId);
+            if (!suggestion || !suggestion.items[itemIdx]) return;
+
+            const item = suggestion.items[itemIdx];
+            
+            // Entferne alte Vorschau
+            clearPreviewMarkers();
+
+            if (item.isRoute) {
+                let points;
+                if (item.pointsString) {
+                    points = item.pointsString.split('|').map(p => {
+                        const [lat, lng] = p.split(',').map(parseFloat);
+                        return [lat, lng];
+                    });
+                } else if (item.points) {
+                    points = item.points;
+                }
+                
+                if (points && points.length > 0) {
+                    const typeConfig = markerTypes[item.type];
+                    const color = getDifficultyColor(item.difficulty);
+                    
+                    previewPolyline = L.polyline(points, {
+                        color: color,
+                        weight: 6,
+                        opacity: 0.8,
+                        dashArray: '10, 10'
+                    }).addTo(map);
+                    
+                    previewPolyline.bindPopup(`
+                        <strong>VORSCHAU: ${item.name}</strong><br>
+                        Aus Tourpaket: ${suggestion.name}<br>
+                        ${typeConfig.icon} ${typeConfig.name}<br>
+                        ${points.length} Wegpunkte
+                    `).openPopup();
+                    
+                    map.fitBounds(points, { padding: [50, 50] });
+                }
+            } else {
+                const typeConfig = markerTypes[item.type];
+                const icon = L.divIcon({
+                    html: `<div style="font-size: 30px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); animation: pulse 1s infinite;">${typeConfig.icon}</div>`,
+                    className: 'custom-icon',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                previewMarker = L.marker([item.lat, item.lng], { icon: icon }).addTo(map);
+                
+                previewMarker.bindPopup(`
+                    <strong>VORSCHAU: ${item.name}</strong><br>
+                    Aus Tourpaket: ${suggestion.name}<br>
+                    ${typeConfig.icon} ${typeConfig.name}<br>
+                    ${item.difficulty ? getDifficultyLabel(item.difficulty) : ''}
+                `).openPopup();
+                
+                map.setView([item.lat, item.lng], 15);
+            }
+
+            closeAdminDashboard();
+            
+            // Banner
+            let banner = document.getElementById('previewBanner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'previewBanner';
+                banner.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: var(--accent-orange);
+                    color: white;
+                    padding: 1rem 2rem;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                    z-index: 9999;
+                    font-weight: bold;
+                    animation: slideDown 0.3s ease;
+                    display: flex;
+                    gap: 1rem;
+                    align-items: center;
+                `;
+                document.body.appendChild(banner);
+            }
+            
+            banner.innerHTML = `
+                <span>👁️ VORSCHAU: ${item.name}</span>
+                <button onclick="returnToAdmin()" style="padding: 0.5rem 1rem; background: white; color: var(--accent-orange); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    ← Zurück
+                </button>
+                <button onclick="approveTourpaketItem(${tourpaketId}, ${itemIdx})" style="padding: 0.5rem 1rem; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    ✅ Annehmen
+                </button>
+                <button onclick="rejectTourpaketItem(${tourpaketId}, ${itemIdx})" style="padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    ❌ Ablehnen
+                </button>
+            `;
+        }
+
+        function approveTourpaketItem(tourpaketId, itemIdx) {
+            const suggestion = markerSuggestions.find(s => s.id === tourpaketId);
+            if (!suggestion || !suggestion.items[itemIdx]) return;
+
+            const item = suggestion.items[itemIdx];
+            const groupId = Date.now();
+            const groupName = suggestion.name;
+
+            const newMarker = {
+                id: Date.now(),
+                name: item.name,
+                type: item.type,
+                difficulty: item.difficulty,
+                description: item.description,
+                groupId: groupId,
+                groupName: groupName,
+                createdAt: new Date().toISOString()
+            };
+
+            if (item.address) {
+                newMarker.address = item.address;
+            }
+
+            if (item.isRoute) {
+                newMarker.isRoute = true;
+                if (item.pointsString) {
+                    newMarker.points = item.pointsString.split('|').map(p => {
+                        const [lat, lng] = p.split(',').map(parseFloat);
+                        return [lat, lng];
+                    });
+                } else if (item.points) {
+                    newMarker.points = item.points;
+                }
+            } else {
+                newMarker.lat = item.lat;
+                newMarker.lng = item.lng;
+            }
+
+            markers.push(newMarker);
+            addMarkerToMap(newMarker);
+            saveMarkersToStorage();
+            updateMarkerList();
+            
+            // Zu Firebase hochladen
+            if (db) {
+                const firebaseMarker = { ...newMarker };
+                if (firebaseMarker.points) {
+                    firebaseMarker.pointsString = firebaseMarker.points.map(p => `${p[0]},${p[1]}`).join('|');
+                    delete firebaseMarker.points;
+                }
+                
+                db.collection('markers').add(firebaseMarker)
+                    .then(() => console.log('✅ Tourpaket-Element zu Firebase hochgeladen'))
+                    .catch(error => console.error('❌ Firebase Fehler:', error));
+            }
+
+            // Element aus Tourpaket entfernen
+            suggestion.items.splice(itemIdx, 1);
+
+            // Wenn Tourpaket leer, komplett entfernen
+            if (suggestion.items.length === 0) {
+                markerSuggestions = markerSuggestions.filter(s => s.id !== tourpaketId);
+                
+                if (db && suggestion.firebaseId) {
+                    db.collection('suggestions').doc(suggestion.firebaseId).update({
+                        status: 'approved'
+                    }).catch(error => console.error('Firebase Fehler:', error));
+                }
+            }
+
+            clearPreviewMarkers();
+            checkAdminCode(); // Dashboard neu öffnen
+            
+            alert(`✅ "${item.name}" wurde zur Karte hinzugefügt!\n\nVerbleibende Elemente im Tourpaket: ${suggestion.items.length}`);
+        }
+
+        function rejectTourpaketItem(tourpaketId, itemIdx) {
+            if (!confirm('Dieses Element wirklich ablehnen?')) return;
+
+            const suggestion = markerSuggestions.find(s => s.id === tourpaketId);
+            if (!suggestion || !suggestion.items[itemIdx]) return;
+
+            const itemName = suggestion.items[itemIdx].name;
+
+            // Element aus Tourpaket entfernen
+            suggestion.items.splice(itemIdx, 1);
+
+            // Wenn Tourpaket leer, komplett entfernen
+            if (suggestion.items.length === 0) {
+                markerSuggestions = markerSuggestions.filter(s => s.id !== tourpaketId);
+                
+                if (db && suggestion.firebaseId) {
+                    db.collection('suggestions').doc(suggestion.firebaseId).update({
+                        status: 'rejected'
+                    }).catch(error => console.error('Firebase Fehler:', error));
+                }
+            }
+
+            clearPreviewMarkers();
+            checkAdminCode(); // Dashboard neu öffnen
+            
+            alert(`❌ "${itemName}" wurde abgelehnt.\n\nVerbleibende Elemente im Tourpaket: ${suggestion.items.length}`);
         }
 
         function rejectSuggestion(id) {
@@ -3607,10 +3875,14 @@
         // Variable für temporäre Vorschau-Marker
         let previewMarker = null;
         let previewPolyline = null;
+        let currentPreviewId = null; // Speichert welcher Vorschlag gerade vorgeschaut wird
 
         function previewSuggestion(id) {
             const suggestion = markerSuggestions.find(s => s.id === id);
             if (!suggestion) return;
+
+            // Speichere ID für spätere Verwendung
+            currentPreviewId = id;
 
             // Entferne alte Vorschau
             clearPreviewMarkers();
@@ -3668,13 +3940,11 @@
                 map.setView([suggestion.lat, suggestion.lng], 15);
             }
 
-            // NICHT Admin-Dashboard schließen! Nur minimieren
-            const dashboard = document.getElementById('adminDashboard');
-            dashboard.style.opacity = '0.3';
-            dashboard.style.pointerEvents = 'none';
+            // Dashboard KOMPLETT schließen
+            closeAdminDashboard();
             
-            // Info-Banner zeigen
-            showPreviewBanner();
+            // Info-Banner zeigen mit Zurück-Button
+            showPreviewBanner(id);
         }
 
         function clearPreviewMarkers() {
@@ -3687,17 +3957,20 @@
                 previewPolyline = null;
             }
             
-            // Admin-Dashboard wieder normal
-            const dashboard = document.getElementById('adminDashboard');
-            if (dashboard) {
-                dashboard.style.opacity = '1';
-                dashboard.style.pointerEvents = 'auto';
-            }
-            
             hidePreviewBanner();
+            currentPreviewId = null;
         }
 
-        function showPreviewBanner() {
+        function returnToAdmin() {
+            clearPreviewMarkers();
+            // Admin-Dashboard wieder öffnen
+            checkAdminCode(); // Öffnet Dashboard automatisch wenn schon eingeloggt
+        }
+
+        function showPreviewBanner(suggestionId) {
+            const suggestion = markerSuggestions.find(s => s.id === suggestionId);
+            if (!suggestion) return;
+
             let banner = document.getElementById('previewBanner');
             if (!banner) {
                 banner = document.createElement('div');
@@ -3715,15 +3988,25 @@
                     z-index: 9999;
                     font-weight: bold;
                     animation: slideDown 0.3s ease;
-                `;
-                banner.innerHTML = `
-                    👁️ VORSCHAU-MODUS
-                    <button onclick="clearPreviewMarkers()" style="margin-left: 1rem; padding: 0.5rem 1rem; background: white; color: var(--accent-orange); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                        ✕ Vorschau beenden
-                    </button>
+                    display: flex;
+                    gap: 1rem;
+                    align-items: center;
                 `;
                 document.body.appendChild(banner);
             }
+            
+            banner.innerHTML = `
+                <span>👁️ VORSCHAU: ${suggestion.name}</span>
+                <button onclick="returnToAdmin()" style="padding: 0.5rem 1rem; background: white; color: var(--accent-orange); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    ← Zurück zum Admin
+                </button>
+                <button onclick="approveSuggestion(${suggestionId})" style="padding: 0.5rem 1rem; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    ✅ Annehmen
+                </button>
+                <button onclick="rejectSuggestion(${suggestionId})" style="padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    ❌ Ablehnen
+                </button>
+            `;
         }
 
         function hidePreviewBanner() {
