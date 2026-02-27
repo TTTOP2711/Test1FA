@@ -1143,12 +1143,12 @@
             <div id="activeGroupInfo" class="active-group-info" style="display: none;">
                 <p class="group-title">🔗 Aktives Tourpaket: <span id="activeGroupNameSidebar"></span></p>
                 <p class="group-count"><span id="groupItemCount">0</span> Element(e) in diesem Tourpaket</p>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-primary" onclick="addToCurrentGroup()" style="flex: 1;">
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <button class="btn btn-primary" onclick="addToCurrentGroup()" style="width: 100%;">
                         📦 Tourpaket verwalten
                     </button>
-                    <button class="btn btn-cancel" onclick="cancelCurrentGroup()" style="flex: 1;">
-                        ❌ Abbrechen
+                    <button class="btn btn-cancel" onclick="cancelCurrentGroup()" style="width: 100%; background-color: #dc2626;">
+                        🗑️ Paket löschen
                     </button>
                 </div>
             </div>
@@ -1930,6 +1930,7 @@
                 currentGroup = {
                     id: Date.now(),
                     name: name, // Initial der Name des ersten Elements
+                    description: '', // Leere Beschreibung initial
                     items: [itemData]
                 };
                 groupMode = true;
@@ -2046,83 +2047,80 @@
                 return;
             }
 
-            // Modal ZUERST schließen
-            document.getElementById('groupOverviewModal').classList.remove('active');
-            
-            // Kleine Verzögerung damit Modal geschlossen ist
-            setTimeout(() => {
-                // Alte Vorschau-Marker entfernen
-                clearGroupPreview();
+            // Alte Vorschau-Marker entfernen
+            clearGroupPreview();
 
-                // Alle Elemente auf der Karte anzeigen
-                const allPoints = [];
+            // Alle Elemente auf der Karte anzeigen
+            const allPoints = [];
 
-                currentGroup.items.forEach((item, index) => {
-                    const typeConfig = markerTypes[item.type];
+            currentGroup.items.forEach((item, index) => {
+                const typeConfig = markerTypes[item.type];
+                
+                if (item.isRoute && item.points) {
+                    // Strecke als Linie zeichnen
+                    const color = difficultyColors[item.difficulty] || '#8b5cf6';
+                    const polyline = L.polyline(item.points, {
+                        color: color,
+                        weight: 5,
+                        opacity: 0.8,
+                        dashArray: '10, 5' // Gestrichelt für Vorschau
+                    }).addTo(map);
                     
-                    if (item.isRoute && item.points) {
-                        // Strecke als Linie zeichnen
-                        const color = difficultyColors[item.difficulty] || '#8b5cf6';
-                        const polyline = L.polyline(item.points, {
-                            color: color,
-                            weight: 5,
-                            opacity: 0.8,
-                            dashArray: '10, 5' // Gestrichelt für Vorschau
-                        }).addTo(map);
-                        
-                        polyline.bindPopup(`
-                            <div style="min-width: 150px;">
-                                <h4 style="margin: 0 0 0.5rem 0; color: ${color};">
-                                    ${typeConfig.icon} ${item.name}
-                                </h4>
-                                <p style="margin: 0; font-size: 0.85rem;">
-                                    <strong>Typ:</strong> ${typeConfig.name}<br>
-                                    ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
-                                    <strong>Wegpunkte:</strong> ${item.points.length}
-                                </p>
-                            </div>
-                        `);
-                        
-                        tempGroupPreviewMarkers.push(polyline);
-                        item.points.forEach(p => allPoints.push(p));
-                    } else {
-                        // Einzelner Marker
-                        const markerIcon = L.divIcon({
-                            html: `<div style="font-size: 2.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">${typeConfig.icon}</div>`,
-                            className: 'custom-marker',
-                            iconSize: [35, 35],
-                            iconAnchor: [17, 35]
-                        });
-
-                        const marker = L.marker([item.lat, item.lng], { icon: markerIcon }).addTo(map);
-                        
-                        marker.bindPopup(`
-                            <div style="min-width: 150px;">
-                                <h4 style="margin: 0 0 0.5rem 0; color: ${typeConfig.color};">
-                                    ${typeConfig.icon} ${item.name}
-                                </h4>
-                                <p style="margin: 0; font-size: 0.85rem;">
-                                    <strong>Typ:</strong> ${typeConfig.name}<br>
-                                    ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
-                                    📍 ${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}
-                                </p>
-                            </div>
-                        `);
-                        
-                        tempGroupPreviewMarkers.push(marker);
-                        allPoints.push([item.lat, item.lng]);
-                    }
-                });
-
-                // Karte auf alle Punkte zoomen
-                if (allPoints.length > 0) {
-                    const bounds = L.latLngBounds(allPoints);
-                    map.fitBounds(bounds, { 
-                        padding: [50, 50],
-                        maxZoom: 15
+                    polyline.bindPopup(`
+                        <div style="min-width: 150px;">
+                            <h4 style="margin: 0 0 0.5rem 0; color: ${color};">
+                                ${typeConfig.icon} ${item.name}
+                            </h4>
+                            <p style="margin: 0; font-size: 0.85rem;">
+                                <strong>Typ:</strong> ${typeConfig.name}<br>
+                                ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
+                                <strong>Wegpunkte:</strong> ${item.points.length}
+                            </p>
+                        </div>
+                    `);
+                    
+                    tempGroupPreviewMarkers.push(polyline);
+                    item.points.forEach(p => allPoints.push(p));
+                } else {
+                    // Einzelner Marker
+                    const markerIcon = L.divIcon({
+                        html: `<div style="font-size: 2.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">${typeConfig.icon}</div>`,
+                        className: 'custom-marker',
+                        iconSize: [35, 35],
+                        iconAnchor: [17, 35]
                     });
+
+                    const marker = L.marker([item.lat, item.lng], { icon: markerIcon }).addTo(map);
+                    
+                    marker.bindPopup(`
+                        <div style="min-width: 150px;">
+                            <h4 style="margin: 0 0 0.5rem 0; color: ${typeConfig.color};">
+                                ${typeConfig.icon} ${item.name}
+                            </h4>
+                            <p style="margin: 0; font-size: 0.85rem;">
+                                <strong>Typ:</strong> ${typeConfig.name}<br>
+                                ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
+                                📍 ${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}
+                            </p>
+                        </div>
+                    `);
+                    
+                    tempGroupPreviewMarkers.push(marker);
+                    allPoints.push([item.lat, item.lng]);
                 }
-            }, 100);
+            });
+
+            // Karte auf alle Punkte zoomen
+            if (allPoints.length > 0) {
+                const bounds = L.latLngBounds(allPoints);
+                map.fitBounds(bounds, { 
+                    padding: [50, 50],
+                    maxZoom: 15
+                });
+            }
+
+            // Modal minimieren für bessere Sicht
+            minimizeGroupModal();
         }
 
         function clearGroupPreview() {
@@ -2164,12 +2162,15 @@
         }
 
         function closeGroupOverviewModal() {
-            // Tourpaket-Namen aus Input aktualisieren
+            // Tourpaket-Namen und Beschreibung aus Input aktualisieren
             if (currentGroup) {
                 const newName = document.getElementById('groupNameInput').value.trim();
+                const newDescription = document.getElementById('groupDescriptionInput').value.trim();
+                
                 if (newName) {
                     currentGroup.name = newName;
                 }
+                currentGroup.description = newDescription;
             }
             
             // Tourpaket-Vorschau entfernen
@@ -2190,11 +2191,14 @@
                 return;
             }
 
-            // Tourpaket-Namen speichern
+            // Tourpaket-Namen und Beschreibung speichern
             const newName = document.getElementById('groupNameInput').value.trim();
+            const newDescription = document.getElementById('groupDescriptionInput').value.trim();
+            
             if (newName) {
                 currentGroup.name = newName;
             }
+            currentGroup.description = newDescription;
 
             // Tourpaket-Modal schließen
             document.getElementById('groupOverviewModal').classList.remove('active');
