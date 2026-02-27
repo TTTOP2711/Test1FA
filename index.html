@@ -1143,9 +1143,14 @@
             <div id="activeGroupInfo" class="active-group-info" style="display: none;">
                 <p class="group-title">🔗 Aktives Tourpaket: <span id="activeGroupNameSidebar"></span></p>
                 <p class="group-count"><span id="groupItemCount">0</span> Element(e) in diesem Tourpaket</p>
-                <button class="btn btn-primary" onclick="addToCurrentGroup()">
-                    📦 Tourpaket verwalten
-                </button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-primary" onclick="addToCurrentGroup()" style="flex: 1;">
+                        📦 Tourpaket verwalten
+                    </button>
+                    <button class="btn btn-cancel" onclick="cancelCurrentGroup()" style="flex: 1;">
+                        ❌ Abbrechen
+                    </button>
+                </div>
             </div>
 
             <!-- Marker-Details Ansicht (wird bei Klick auf Marker angezeigt) -->
@@ -1987,8 +1992,9 @@
         function openGroupOverviewModal() {
             if (!currentGroup) return;
 
-            // Gruppennamen setzen
+            // Gruppennamen und Beschreibung setzen
             document.getElementById('groupNameInput').value = currentGroup.name;
+            document.getElementById('groupDescriptionInput').value = currentGroup.description || '';
 
             // Items-Liste aufbauen
             updateGroupItemsList();
@@ -2040,80 +2046,83 @@
                 return;
             }
 
-            // Alte Vorschau-Marker entfernen
-            clearGroupPreview();
+            // Modal ZUERST schließen
+            document.getElementById('groupOverviewModal').classList.remove('active');
+            
+            // Kleine Verzögerung damit Modal geschlossen ist
+            setTimeout(() => {
+                // Alte Vorschau-Marker entfernen
+                clearGroupPreview();
 
-            // Alle Elemente auf der Karte anzeigen
-            const allPoints = [];
+                // Alle Elemente auf der Karte anzeigen
+                const allPoints = [];
 
-            currentGroup.items.forEach((item, index) => {
-                const typeConfig = markerTypes[item.type];
-                
-                if (item.isRoute && item.points) {
-                    // Strecke als Linie zeichnen
-                    const color = difficultyColors[item.difficulty] || '#8b5cf6';
-                    const polyline = L.polyline(item.points, {
-                        color: color,
-                        weight: 5,
-                        opacity: 0.8,
-                        dashArray: '10, 5' // Gestrichelt für Vorschau
-                    }).addTo(map);
+                currentGroup.items.forEach((item, index) => {
+                    const typeConfig = markerTypes[item.type];
                     
-                    polyline.bindPopup(`
-                        <div style="min-width: 150px;">
-                            <h4 style="margin: 0 0 0.5rem 0; color: ${color};">
-                                ${typeConfig.icon} ${item.name}
-                            </h4>
-                            <p style="margin: 0; font-size: 0.85rem;">
-                                <strong>Typ:</strong> ${typeConfig.name}<br>
-                                ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
-                                <strong>Wegpunkte:</strong> ${item.points.length}
-                            </p>
-                        </div>
-                    `);
-                    
-                    tempGroupPreviewMarkers.push(polyline);
-                    item.points.forEach(p => allPoints.push(p));
-                } else {
-                    // Einzelner Marker
-                    const markerIcon = L.divIcon({
-                        html: `<div style="font-size: 2.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">${typeConfig.icon}</div>`,
-                        className: 'custom-marker',
-                        iconSize: [35, 35],
-                        iconAnchor: [17, 35]
-                    });
+                    if (item.isRoute && item.points) {
+                        // Strecke als Linie zeichnen
+                        const color = difficultyColors[item.difficulty] || '#8b5cf6';
+                        const polyline = L.polyline(item.points, {
+                            color: color,
+                            weight: 5,
+                            opacity: 0.8,
+                            dashArray: '10, 5' // Gestrichelt für Vorschau
+                        }).addTo(map);
+                        
+                        polyline.bindPopup(`
+                            <div style="min-width: 150px;">
+                                <h4 style="margin: 0 0 0.5rem 0; color: ${color};">
+                                    ${typeConfig.icon} ${item.name}
+                                </h4>
+                                <p style="margin: 0; font-size: 0.85rem;">
+                                    <strong>Typ:</strong> ${typeConfig.name}<br>
+                                    ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
+                                    <strong>Wegpunkte:</strong> ${item.points.length}
+                                </p>
+                            </div>
+                        `);
+                        
+                        tempGroupPreviewMarkers.push(polyline);
+                        item.points.forEach(p => allPoints.push(p));
+                    } else {
+                        // Einzelner Marker
+                        const markerIcon = L.divIcon({
+                            html: `<div style="font-size: 2.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">${typeConfig.icon}</div>`,
+                            className: 'custom-marker',
+                            iconSize: [35, 35],
+                            iconAnchor: [17, 35]
+                        });
 
-                    const marker = L.marker([item.lat, item.lng], { icon: markerIcon }).addTo(map);
-                    
-                    marker.bindPopup(`
-                        <div style="min-width: 150px;">
-                            <h4 style="margin: 0 0 0.5rem 0; color: ${typeConfig.color};">
-                                ${typeConfig.icon} ${item.name}
-                            </h4>
-                            <p style="margin: 0; font-size: 0.85rem;">
-                                <strong>Typ:</strong> ${typeConfig.name}<br>
-                                ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
-                                📍 ${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}
-                            </p>
-                        </div>
-                    `);
-                    
-                    tempGroupPreviewMarkers.push(marker);
-                    allPoints.push([item.lat, item.lng]);
-                }
-            });
-
-            // Karte auf alle Punkte zoomen
-            if (allPoints.length > 0) {
-                const bounds = L.latLngBounds(allPoints);
-                map.fitBounds(bounds, { 
-                    padding: [50, 50],
-                    maxZoom: 15
+                        const marker = L.marker([item.lat, item.lng], { icon: markerIcon }).addTo(map);
+                        
+                        marker.bindPopup(`
+                            <div style="min-width: 150px;">
+                                <h4 style="margin: 0 0 0.5rem 0; color: ${typeConfig.color};">
+                                    ${typeConfig.icon} ${item.name}
+                                </h4>
+                                <p style="margin: 0; font-size: 0.85rem;">
+                                    <strong>Typ:</strong> ${typeConfig.name}<br>
+                                    ${item.difficulty ? `<strong>Schwierigkeit:</strong> ${getDifficultyLabel(item.difficulty)}<br>` : ''}
+                                    📍 ${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}
+                                </p>
+                            </div>
+                        `);
+                        
+                        tempGroupPreviewMarkers.push(marker);
+                        allPoints.push([item.lat, item.lng]);
+                    }
                 });
-            }
 
-            // Modal minimieren für bessere Sicht
-            minimizeGroupModal();
+                // Karte auf alle Punkte zoomen
+                if (allPoints.length > 0) {
+                    const bounds = L.latLngBounds(allPoints);
+                    map.fitBounds(bounds, { 
+                        padding: [50, 50],
+                        maxZoom: 15
+                    });
+                }
+            }, 100);
         }
 
         function clearGroupPreview() {
@@ -2229,6 +2238,26 @@
             } else {
                 document.getElementById('activeGroupInfo').style.display = 'none';
             }
+        }
+
+        function cancelCurrentGroup() {
+            if (!currentGroup) return;
+            
+            const confirmText = `Tourpaket "${currentGroup.name}" mit ${currentGroup.items.length} Element(en) wirklich abbrechen?\n\n⚠️ Alle Punkte gehen verloren!`;
+            
+            if (!confirm(confirmText)) return;
+            
+            // Tourpaket-Vorschau entfernen
+            clearGroupPreview();
+            
+            // Gruppe zurücksetzen
+            currentGroup = null;
+            groupMode = false;
+            
+            // UI aktualisieren
+            updateGroupUI();
+            
+            alert('✅ Tourpaket wurde abgebrochen.');
         }
 
         function finishGroup() {
@@ -3425,6 +3454,7 @@
                                 <span class="suggestion-badge badge-pending">Ausstehend</span>
                             </div>
                             
+                            ${s.description ? `<p style="margin: 0.5rem 0;"><strong>Beschreibung:</strong> ${s.description}</p>` : ''}
                             <p style="font-size: 0.85rem; color: #999; margin: 0.5rem 0;">Eingereicht: ${new Date(s.createdAt).toLocaleString('de-DE')}</p>
                             
                             <div style="margin-top: 1rem;">
