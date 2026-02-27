@@ -1862,6 +1862,13 @@
             const difficulty = document.getElementById('markerDifficulty').value;
             const description = document.getElementById('markerDescription').value;
             
+            // Adress-Daten sammeln
+            const address = document.getElementById('markerAddress').value.trim();
+            const street = document.getElementById('markerStreet').value.trim();
+            const postcode = document.getElementById('markerPostcode').value.trim();
+            const city = document.getElementById('markerCity').value.trim();
+            const country = document.getElementById('markerCountry').value.trim();
+            
             if (!name) {
                 alert('⚠️ Bitte gib einen Namen ein!');
                 return;
@@ -1875,6 +1882,17 @@
                     difficulty: difficulty,
                     description: description
                 };
+                
+                // Adresse hinzufügen wenn vorhanden
+                if (address || street || city) {
+                    itemData.address = {
+                        full: address,
+                        street: street,
+                        postcode: postcode,
+                        city: city,
+                        country: country
+                    };
+                }
                 
                 if (tempMarkerData.isRoute) {
                     itemData.points = tempMarkerData.points;
@@ -1916,6 +1934,17 @@
                     difficulty: difficulty,
                     description: description
                 };
+                
+                // Adresse hinzufügen wenn vorhanden
+                if (address || street || city) {
+                    itemData.address = {
+                        full: address,
+                        street: street,
+                        postcode: postcode,
+                        city: city,
+                        country: country
+                    };
+                }
                 
                 if (tempMarkerData.isRoute) {
                     itemData.points = tempMarkerData.points;
@@ -3603,15 +3632,129 @@
 
             console.log('🔍 Tourpaket-Vorschau:', suggestion.name, suggestion.items.length, 'Elemente');
 
-            // Entferne alte Vorschau
-            clearPreviewMarkers();
+            currentPreviewId = id;
 
-            // Sammle alle Koordinaten UND erstelle temporäre Marker
-            const allCoords = [];
-            
-            suggestion.items.forEach((item, idx) => {
-                const typeConfig = markerTypes[item.type];
+            // Dashboard ZUERST schließen
+            closeAdminDashboard();
+
+            // Verzögerung damit Dashboard geschlossen ist
+            setTimeout(() => {
+                // Entferne alte Vorschau
+                clearPreviewMarkers();
+
+                const allCoords = [];
                 
+                suggestion.items.forEach((item, idx) => {
+                    const typeConfig = markerTypes[item.type];
+                    
+                    if (item.isRoute) {
+                        let points;
+                        if (item.pointsString) {
+                            points = item.pointsString.split('|').map(p => {
+                                const [lat, lng] = p.split(',').map(parseFloat);
+                                return [lat, lng];
+                            });
+                        } else if (item.points) {
+                            points = item.points;
+                        }
+                        if (points) {
+                            allCoords.push(...points);
+                            
+                            const color = getDifficultyColor(item.difficulty);
+                            const line = L.polyline(points, {
+                                color: color,
+                                weight: 5,
+                                opacity: 0.7,
+                                dashArray: '5, 5'
+                            }).addTo(map);
+                            
+                            line.bindPopup(`
+                                <strong>${item.name}</strong><br>
+                                ${typeConfig.icon} ${typeConfig.name}<br>
+                                Element ${idx + 1} von ${suggestion.items.length}
+                            `);
+                            
+                            previewMarkers.push(line);
+                        }
+                    } else {
+                        allCoords.push([item.lat, item.lng]);
+                        
+                        const icon = L.divIcon({
+                            html: `<div style="font-size: 25px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">${typeConfig.icon}</div>`,
+                            className: 'custom-icon',
+                            iconSize: [25, 25],
+                            iconAnchor: [12, 12]
+                        });
+                        
+                        const marker = L.marker([item.lat, item.lng], { icon: icon }).addTo(map);
+                        
+                        marker.bindPopup(`
+                            <strong>${item.name}</strong><br>
+                            ${typeConfig.icon} ${typeConfig.name}<br>
+                            Element ${idx + 1} von ${suggestion.items.length}
+                        `);
+                        
+                        previewMarkers.push(marker);
+                    }
+                });
+
+                console.log('✅', previewMarkers.length, 'Marker/Linien hinzugefügt');
+
+                if (allCoords.length > 0) {
+                    const bounds = L.latLngBounds(allCoords);
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+                
+                // Banner
+                let banner = document.getElementById('previewBanner');
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 'previewBanner';
+                    banner.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: var(--accent-orange);
+                        color: white;
+                        padding: 1rem 2rem;
+                        border-radius: 8px;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                        z-index: 9999;
+                        font-weight: bold;
+                        animation: slideDown 0.3s ease;
+                        display: flex;
+                        gap: 1rem;
+                        align-items: center;
+                    `;
+                    document.body.appendChild(banner);
+                }
+                
+                banner.innerHTML = `
+                    <span>👁️ VORSCHAU TOURPAKET: ${suggestion.name} (${suggestion.items.length} Elemente)</span>
+                    <button onclick="returnToAdmin()" style="padding: 0.5rem 1rem; background: white; color: var(--accent-orange); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        ← Zurück zum Admin
+                    </button>
+                `;
+            }, 100);
+        }
+
+        function previewTourpaketItem(tourpaketId, itemIdx) {
+            const suggestion = markerSuggestions.find(s => s.id === tourpaketId);
+            if (!suggestion || !suggestion.items[itemIdx]) return;
+
+            const item = suggestion.items[itemIdx];
+            
+            currentPreviewId = tourpaketId;
+
+            // Dashboard ZUERST schließen
+            closeAdminDashboard();
+
+            // Verzögerung
+            setTimeout(() => {
+                // Entferne alte Vorschau
+                clearPreviewMarkers();
+
                 if (item.isRoute) {
                     let points;
                     if (item.pointsString) {
@@ -3622,191 +3765,86 @@
                     } else if (item.points) {
                         points = item.points;
                     }
-                    if (points) {
-                        allCoords.push(...points);
-                        
-                        // Zeige Strecke als Linie
+                    
+                    if (points && points.length > 0) {
+                        const typeConfig = markerTypes[item.type];
                         const color = getDifficultyColor(item.difficulty);
-                        const line = L.polyline(points, {
+                        
+                        previewPolyline = L.polyline(points, {
                             color: color,
-                            weight: 5,
-                            opacity: 0.7,
-                            dashArray: '5, 5'
+                            weight: 6,
+                            opacity: 0.8,
+                            dashArray: '10, 10'
                         }).addTo(map);
                         
-                        line.bindPopup(`
-                            <strong>${item.name}</strong><br>
+                        previewPolyline.bindPopup(`
+                            <strong>VORSCHAU: ${item.name}</strong><br>
+                            Aus Tourpaket: ${suggestion.name}<br>
                             ${typeConfig.icon} ${typeConfig.name}<br>
-                            Element ${idx + 1} von ${suggestion.items.length}
-                        `);
+                            ${points.length} Wegpunkte
+                        `).openPopup();
                         
-                        previewMarkers.push(line);
+                        map.fitBounds(points, { padding: [50, 50] });
                     }
                 } else {
-                    allCoords.push([item.lat, item.lng]);
-                    
-                    // Erstelle temporären Marker
-                    const icon = L.divIcon({
-                        html: `<div style="font-size: 25px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">${typeConfig.icon}</div>`,
-                        className: 'custom-icon',
-                        iconSize: [25, 25],
-                        iconAnchor: [12, 12]
-                    });
-                    
-                    const marker = L.marker([item.lat, item.lng], { icon: icon }).addTo(map);
-                    
-                    marker.bindPopup(`
-                        <strong>${item.name}</strong><br>
-                        ${typeConfig.icon} ${typeConfig.name}<br>
-                        Element ${idx + 1} von ${suggestion.items.length}
-                    `);
-                    
-                    previewMarkers.push(marker);
-                }
-            });
-
-            console.log('✅', previewMarkers.length, 'Marker/Linien hinzugefügt');
-
-            if (allCoords.length > 0) {
-                const bounds = L.latLngBounds(allCoords);
-                map.fitBounds(bounds, { padding: [50, 50] });
-            }
-
-            closeAdminDashboard();
-            
-            // Banner mit Tourpaket-Info
-            let banner = document.getElementById('previewBanner');
-            if (!banner) {
-                banner = document.createElement('div');
-                banner.id = 'previewBanner';
-                banner.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: var(--accent-orange);
-                    color: white;
-                    padding: 1rem 2rem;
-                    border-radius: 8px;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-                    z-index: 9999;
-                    font-weight: bold;
-                    animation: slideDown 0.3s ease;
-                    display: flex;
-                    gap: 1rem;
-                    align-items: center;
-                `;
-                document.body.appendChild(banner);
-            }
-            
-            banner.innerHTML = `
-                <span>👁️ VORSCHAU TOURPAKET: ${suggestion.name} (${suggestion.items.length} Elemente)</span>
-                <button onclick="returnToAdmin()" style="padding: 0.5rem 1rem; background: white; color: var(--accent-orange); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                    ← Zurück zum Admin
-                </button>
-            `;
-        }
-
-        function previewTourpaketItem(tourpaketId, itemIdx) {
-            const suggestion = markerSuggestions.find(s => s.id === tourpaketId);
-            if (!suggestion || !suggestion.items[itemIdx]) return;
-
-            const item = suggestion.items[itemIdx];
-            
-            // Entferne alte Vorschau
-            clearPreviewMarkers();
-
-            if (item.isRoute) {
-                let points;
-                if (item.pointsString) {
-                    points = item.pointsString.split('|').map(p => {
-                        const [lat, lng] = p.split(',').map(parseFloat);
-                        return [lat, lng];
-                    });
-                } else if (item.points) {
-                    points = item.points;
-                }
-                
-                if (points && points.length > 0) {
                     const typeConfig = markerTypes[item.type];
-                    const color = getDifficultyColor(item.difficulty);
+                    const icon = L.divIcon({
+                        html: `<div style="font-size: 30px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); animation: pulse 1s infinite;">${typeConfig.icon}</div>`,
+                        className: 'custom-icon',
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+
+                    previewMarker = L.marker([item.lat, item.lng], { icon: icon }).addTo(map);
                     
-                    previewPolyline = L.polyline(points, {
-                        color: color,
-                        weight: 6,
-                        opacity: 0.8,
-                        dashArray: '10, 10'
-                    }).addTo(map);
-                    
-                    previewPolyline.bindPopup(`
+                    previewMarker.bindPopup(`
                         <strong>VORSCHAU: ${item.name}</strong><br>
                         Aus Tourpaket: ${suggestion.name}<br>
                         ${typeConfig.icon} ${typeConfig.name}<br>
-                        ${points.length} Wegpunkte
+                        ${item.difficulty ? getDifficultyLabel(item.difficulty) : ''}
                     `).openPopup();
                     
-                    map.fitBounds(points, { padding: [50, 50] });
+                    map.setView([item.lat, item.lng], 15);
                 }
-            } else {
-                const typeConfig = markerTypes[item.type];
-                const icon = L.divIcon({
-                    html: `<div style="font-size: 30px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); animation: pulse 1s infinite;">${typeConfig.icon}</div>`,
-                    className: 'custom-icon',
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
-                });
 
-                previewMarker = L.marker([item.lat, item.lng], { icon: icon }).addTo(map);
+                // Banner
+                let banner = document.getElementById('previewBanner');
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 'previewBanner';
+                    banner.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: var(--accent-orange);
+                        color: white;
+                        padding: 1rem 2rem;
+                        border-radius: 8px;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                        z-index: 9999;
+                        font-weight: bold;
+                        animation: slideDown 0.3s ease;
+                        display: flex;
+                        gap: 1rem;
+                        align-items: center;
+                    `;
+                    document.body.appendChild(banner);
+                }
                 
-                previewMarker.bindPopup(`
-                    <strong>VORSCHAU: ${item.name}</strong><br>
-                    Aus Tourpaket: ${suggestion.name}<br>
-                    ${typeConfig.icon} ${typeConfig.name}<br>
-                    ${item.difficulty ? getDifficultyLabel(item.difficulty) : ''}
-                `).openPopup();
-                
-                map.setView([item.lat, item.lng], 15);
-            }
-
-            closeAdminDashboard();
-            
-            // Banner
-            let banner = document.getElementById('previewBanner');
-            if (!banner) {
-                banner = document.createElement('div');
-                banner.id = 'previewBanner';
-                banner.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: var(--accent-orange);
-                    color: white;
-                    padding: 1rem 2rem;
-                    border-radius: 8px;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-                    z-index: 9999;
-                    font-weight: bold;
-                    animation: slideDown 0.3s ease;
-                    display: flex;
-                    gap: 1rem;
-                    align-items: center;
+                banner.innerHTML = `
+                    <span>👁️ VORSCHAU: ${item.name}</span>
+                    <button onclick="returnToAdmin()" style="padding: 0.5rem 1rem; background: white; color: var(--accent-orange); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        ← Zurück
+                    </button>
+                    <button onclick="approveTourpaketItem(${tourpaketId}, ${itemIdx})" style="padding: 0.5rem 1rem; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        ✅ Annehmen
+                    </button>
+                    <button onclick="rejectTourpaketItem(${tourpaketId}, ${itemIdx})" style="padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        ❌ Ablehnen
+                    </button>
                 `;
-                document.body.appendChild(banner);
-            }
-            
-            banner.innerHTML = `
-                <span>👁️ VORSCHAU: ${item.name}</span>
-                <button onclick="returnToAdmin()" style="padding: 0.5rem 1rem; background: white; color: var(--accent-orange); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                    ← Zurück
-                </button>
-                <button onclick="approveTourpaketItem(${tourpaketId}, ${itemIdx})" style="padding: 0.5rem 1rem; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                    ✅ Annehmen
-                </button>
-                <button onclick="rejectTourpaketItem(${tourpaketId}, ${itemIdx})" style="padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                    ❌ Ablehnen
-                </button>
-            `;
+            }, 100);
         }
 
         function approveTourpaketItem(tourpaketId, itemIdx) {
@@ -3949,102 +3987,105 @@
 
             console.log('🔍 Vorschau für:', suggestion.name, 'isRoute:', suggestion.isRoute);
 
-            // Speichere ID für spätere Verwendung
+            // Speichere ID SOFORT
             currentPreviewId = id;
 
-            // Entferne alte Vorschau
-            clearPreviewMarkers();
+            // Dashboard ZUERST schließen
+            closeAdminDashboard();
 
-            if (suggestion.isRoute) {
-                let points;
-                if (suggestion.pointsString) {
-                    points = suggestion.pointsString.split('|').map(p => {
-                        const [lat, lng] = p.split(',').map(parseFloat);
-                        return [lat, lng];
-                    });
-                } else if (suggestion.points) {
-                    points = suggestion.points;
-                }
-                
-                console.log('📍 Strecken-Punkte:', points);
-                
-                if (points && points.length > 0) {
-                    // Zeige Strecke als temporäre Linie
+            // Kleine Verzögerung damit Dashboard geschlossen ist
+            setTimeout(() => {
+                // Entferne alte Vorschau
+                clearPreviewMarkers();
+
+                if (suggestion.isRoute) {
+                    let points;
+                    if (suggestion.pointsString) {
+                        points = suggestion.pointsString.split('|').map(p => {
+                            const [lat, lng] = p.split(',').map(parseFloat);
+                            return [lat, lng];
+                        });
+                    } else if (suggestion.points) {
+                        points = suggestion.points;
+                    }
+                    
+                    console.log('📍 Strecken-Punkte:', points);
+                    
+                    if (points && points.length > 0) {
+                        const typeConfig = markerTypes[suggestion.type];
+                        const color = getDifficultyColor(suggestion.difficulty);
+                        
+                        previewPolyline = L.polyline(points, {
+                            color: color,
+                            weight: 6,
+                            opacity: 0.9,
+                            dashArray: '10, 10'
+                        }).addTo(map);
+                        
+                        console.log('✅ Polyline hinzugefügt');
+                        
+                        // Start-Marker
+                        const startIcon = L.divIcon({
+                            html: '<div style="background: #22c55e; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">S</div>',
+                            className: '',
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 15]
+                        });
+                        
+                        // Ziel-Marker
+                        const endIcon = L.divIcon({
+                            html: '<div style="background: #dc2626; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">Z</div>',
+                            className: '',
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 15]
+                        });
+                        
+                        const startMarker = L.marker(points[0], { icon: startIcon }).addTo(map);
+                        const endMarker = L.marker(points[points.length - 1], { icon: endIcon }).addTo(map);
+                        
+                        previewMarkers.push(startMarker, endMarker);
+                        
+                        // Popup an Mittelpunkt
+                        const midPoint = Math.floor(points.length / 2);
+                        const popupMarker = L.marker(points[midPoint], {
+                            opacity: 0
+                        }).addTo(map);
+                        
+                        popupMarker.bindPopup(`
+                            <strong>VORSCHAU: ${suggestion.name}</strong><br>
+                            ${typeConfig.icon} ${typeConfig.name}<br>
+                            ${points.length} Wegpunkte<br>
+                            <span style="color: ${color};">■</span> ${suggestion.difficulty ? getDifficultyLabel(suggestion.difficulty) : ''}
+                        `).openPopup();
+                        
+                        previewMarkers.push(popupMarker);
+                        
+                        map.fitBounds(points, { padding: [50, 50] });
+                    }
+                } else {
+                    // Einzelner Marker
                     const typeConfig = markerTypes[suggestion.type];
-                    const color = getDifficultyColor(suggestion.difficulty);
-                    
-                    previewPolyline = L.polyline(points, {
-                        color: color,
-                        weight: 6,
-                        opacity: 0.9,
-                        dashArray: '10, 10'
-                    }).addTo(map);
-                    
-                    console.log('✅ Polyline hinzugefügt');
-                    
-                    // Marker an Start- und Endpunkt
-                    const startIcon = L.divIcon({
-                        html: '<div style="background: #22c55e; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">S</div>',
-                        className: '',
+                    const icon = L.divIcon({
+                        html: `<div style="font-size: 30px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); animation: pulse 1s infinite;">${typeConfig.icon}</div>`,
+                        className: 'custom-icon',
                         iconSize: [30, 30],
                         iconAnchor: [15, 15]
                     });
+
+                    previewMarker = L.marker([suggestion.lat, suggestion.lng], { icon: icon }).addTo(map);
                     
-                    const endIcon = L.divIcon({
-                        html: '<div style="background: #dc2626; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">Z</div>',
-                        className: '',
-                        iconSize: [30, 30],
-                        iconAnchor: [15, 15]
-                    });
-                    
-                    const startMarker = L.marker(points[0], { icon: startIcon }).addTo(map);
-                    const endMarker = L.marker(points[points.length - 1], { icon: endIcon }).addTo(map);
-                    
-                    previewMarkers.push(startMarker, endMarker);
-                    
-                    // Popup an Mittelpunkt der Linie
-                    const midPoint = Math.floor(points.length / 2);
-                    const popupMarker = L.marker(points[midPoint], {
-                        opacity: 0
-                    }).addTo(map);
-                    
-                    popupMarker.bindPopup(`
+                    previewMarker.bindPopup(`
                         <strong>VORSCHAU: ${suggestion.name}</strong><br>
                         ${typeConfig.icon} ${typeConfig.name}<br>
-                        ${points.length} Wegpunkte<br>
-                        <span style="color: ${color};">■</span> ${suggestion.difficulty ? getDifficultyLabel(suggestion.difficulty) : ''}
+                        ${suggestion.difficulty ? getDifficultyLabel(suggestion.difficulty) : ''}
                     `).openPopup();
                     
-                    previewMarkers.push(popupMarker);
-                    
-                    map.fitBounds(points, { padding: [50, 50] });
+                    map.setView([suggestion.lat, suggestion.lng], 15);
                 }
-            } else {
-                // Zeige temporären Marker
-                const typeConfig = markerTypes[suggestion.type];
-                const icon = L.divIcon({
-                    html: `<div style="font-size: 30px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); animation: pulse 1s infinite;">${typeConfig.icon}</div>`,
-                    className: 'custom-icon',
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
-                });
 
-                previewMarker = L.marker([suggestion.lat, suggestion.lng], { icon: icon }).addTo(map);
-                
-                previewMarker.bindPopup(`
-                    <strong>VORSCHAU: ${suggestion.name}</strong><br>
-                    ${typeConfig.icon} ${typeConfig.name}<br>
-                    ${suggestion.difficulty ? getDifficultyLabel(suggestion.difficulty) : ''}
-                `).openPopup();
-                
-                map.setView([suggestion.lat, suggestion.lng], 15);
-            }
-
-            // Dashboard KOMPLETT schließen
-            closeAdminDashboard();
-            
-            // Info-Banner zeigen mit Zurück-Button
-            showPreviewBanner(id);
+                // Banner zeigen
+                showPreviewBanner(id);
+            }, 100); // 100ms Verzögerung
         }
 
         function clearPreviewMarkers() {
