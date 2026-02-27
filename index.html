@@ -1148,15 +1148,19 @@
                 </button>
             </div>
 
-            <div class="sidebar-section">
-                <h3>📊 Statistik</h3>
-                <p style="font-size: 1.2rem; font-weight: 600; color: var(--secondary-green);">
-                    <span id="markerCount">0</span> Marker auf der Karte
-                </p>
+            <!-- Marker-Details Ansicht (wird bei Klick auf Marker angezeigt) -->
+            <div id="markerDetailsView" style="display: none;">
+                <button class="btn btn-secondary" onclick="closeMarkerDetails()" style="margin-bottom: 1rem; width: 100%;">
+                    ← Zurück zur Liste
+                </button>
+                
+                <div id="markerDetailsContent">
+                    <!-- Wird dynamisch befüllt -->
+                </div>
             </div>
 
-            <div class="sidebar-section">
-                <h3>📍 Veröffentlichte Marker</h3>
+            <div class="sidebar-section" id="markerListSection">
+                <h3>📍 Veröffentlichte Marker (<span id="markerCount">0</span>)</h3>
                 <div class="marker-list-container" id="markerListContainer">
                     <p style="color: #999; text-align: center; padding: 1rem;">Noch keine Marker</p>
                 </div>
@@ -1235,6 +1239,11 @@
             <div class="form-group">
                 <label for="groupNameInput">Tourpaket-Name</label>
                 <input type="text" id="groupNameInput" placeholder="z.B. Waldtrail Süd" autocomplete="off">
+            </div>
+
+            <div class="form-group">
+                <label for="groupDescriptionInput">Beschreibung (optional)</label>
+                <textarea id="groupDescriptionInput" rows="3" placeholder="Beschreibe dieses Tourpaket..." autocomplete="off"></textarea>
             </div>
 
             <div class="sidebar-section">
@@ -2241,10 +2250,17 @@
                 return;
             }
 
+            // Tourpaket-Namen und Beschreibung aktualisieren
+            const newName = document.getElementById('groupNameInput').value.trim();
+            const newDescription = document.getElementById('groupDescriptionInput').value.trim();
+            if (newName) currentGroup.name = newName;
+            currentGroup.description = newDescription;
+
             // Tourpaket als Vorschlag zu Firebase senden
             const groupSuggestion = {
                 id: Date.now(),
                 name: currentGroup.name,
+                description: currentGroup.description,
                 type: 'tourpaket',
                 items: currentGroup.items.map(item => {
                     // Konvertiere Points zu String für Firebase
@@ -2490,10 +2506,13 @@
                 polyline.bindPopup(popupContent);
                 polyline.markerId = markerData.id;
                 
-                // Click-Event für Tourpaket-Hervorhebung
-                if (markerData.groupId) {
-                    polyline.on('click', () => highlightTourpaket(markerData.groupId));
-                }
+                // Click-Event für Details in Sidebar
+                polyline.on('click', () => {
+                    showMarkerDetails(markerData.id);
+                    if (markerData.groupId) {
+                        highlightTourpaket(markerData.groupId);
+                    }
+                });
             } else {
                 // Einzelner Marker - Größe und Sichtbarkeit abhängig vom Zoom
                 let iconSize, fontSize;
@@ -2533,16 +2552,161 @@
                 marker.bindPopup(popupContent);
                 marker.markerId = markerData.id;
                 
-                // Click-Event für Tourpaket-Hervorhebung
-                if (markerData.groupId) {
-                    marker.on('click', () => highlightTourpaket(markerData.groupId));
-                }
+                // Click-Event für Details in Sidebar
+                marker.on('click', () => {
+                    showMarkerDetails(markerData.id);
+                    if (markerData.groupId) {
+                        highlightTourpaket(markerData.groupId);
+                    }
+                });
             }
         }
 
         function updateMarkerSizes() {
             // Alle Marker neu zeichnen mit angepasster Größe
             reloadMap();
+        }
+
+        function showMarkerDetails(markerId) {
+            const marker = markers.find(m => m.id === markerId);
+            if (!marker) return;
+
+            const typeConfig = markerTypes[marker.type];
+
+            // Sammle alle Marker der gleichen Gruppe
+            let groupMarkers = [];
+            if (marker.groupId) {
+                groupMarkers = markers.filter(m => m.groupId === marker.groupId && m.id !== markerId);
+            }
+
+            let detailsHTML = `
+                <div style="background-color: var(--light-beige); padding: 1.5rem; border-radius: 8px; border-left: 4px solid ${typeConfig.color};">
+                    <h2 style="margin: 0 0 1rem 0; color: var(--primary-green);">
+                        ${typeConfig.icon} ${marker.name}
+                    </h2>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <p style="margin: 0.5rem 0;"><strong>Typ:</strong> ${typeConfig.name}</p>
+                        ${marker.difficulty ? `<p style="margin: 0.5rem 0;"><strong>Schwierigkeit:</strong> ${getDifficultyLabel(marker.difficulty)}</p>` : ''}
+                        ${marker.description ? `<p style="margin: 0.5rem 0;"><strong>Beschreibung:</strong> ${marker.description}</p>` : ''}
+                        ${marker.address && marker.address.full ? `<p style="margin: 0.5rem 0;"><strong>📍 Adresse:</strong> ${marker.address.full}</p>` : ''}
+                        
+                        ${marker.isRoute ? 
+                            `<p style="margin: 0.5rem 0;"><strong>Wegpunkte:</strong> ${marker.points.length}</p>` :
+                            `<p style="margin: 0.5rem 0; font-size: 0.85rem; color: #666;"><strong>Koordinaten:</strong> ${marker.lat.toFixed(5)}, ${marker.lng.toFixed(5)}</p>`
+                        }
+                        
+                        ${marker.createdAt ? `<p style="margin: 0.5rem 0; font-size: 0.85rem; color: #999;">🕐 Hinzugefügt: ${new Date(marker.createdAt).toLocaleString('de-DE')}</p>` : ''}
+                    </div>
+                    
+                    ${marker.groupId ? `
+                        <div style="background: white; padding: 1rem; border-radius: 5px; margin-top: 1rem;">
+                            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: var(--accent-orange);">
+                                🔗 Teil von: ${marker.groupName}
+                            </p>
+                            ${marker.groupDescription ? `<p style="margin: 0.5rem 0; font-size: 0.9rem; color: #666;">${marker.groupDescription}</p>` : ''}
+                            <button class="btn btn-primary" onclick="showGroupView('${marker.groupId}')" style="width: 100%; margin-top: 0.5rem;">
+                                📦 Gesamtes Tourpaket anzeigen
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            // Verknüpfte Punkte anzeigen
+            if (groupMarkers.length > 0) {
+                detailsHTML += `
+                    <div style="margin-top: 1.5rem;">
+                        <h3 style="color: var(--primary-green); margin-bottom: 1rem;">🔗 Weitere Punkte im Tourpaket (${groupMarkers.length})</h3>
+                        ${groupMarkers.map(m => {
+                            const mType = markerTypes[m.type];
+                            return `
+                                <div onclick="showMarkerDetails(${m.id})" style="background: var(--light-beige); padding: 0.8rem; margin-bottom: 0.5rem; border-radius: 5px; border-left: 3px solid ${mType.color}; cursor: pointer; transition: all 0.2s;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <strong>${mType.icon} ${m.name}</strong>
+                                            <div style="font-size: 0.85rem; color: #666; margin-top: 0.2rem;">${mType.name}</div>
+                                        </div>
+                                        <span style="color: var(--accent-orange); font-size: 1.2rem;">→</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
+
+            document.getElementById('markerDetailsContent').innerHTML = detailsHTML;
+            document.getElementById('markerDetailsView').style.display = 'block';
+            document.getElementById('markerListSection').style.display = 'none';
+        }
+
+        function closeMarkerDetails() {
+            document.getElementById('markerDetailsView').style.display = 'none';
+            document.getElementById('markerListSection').style.display = 'block';
+        }
+
+        function showGroupView(groupId) {
+            const groupMarkers = markers.filter(m => m.groupId == groupId);
+            if (groupMarkers.length === 0) return;
+
+            const firstMarker = groupMarkers[0];
+            
+            let groupHTML = `
+                <div style="background-color: var(--light-beige); padding: 1.5rem; border-radius: 8px; border-left: 4px solid var(--accent-orange);">
+                    <h2 style="margin: 0 0 1rem 0; color: var(--primary-green);">
+                        📦 ${firstMarker.groupName}
+                    </h2>
+                    
+                    ${firstMarker.groupDescription ? `<p style="margin-bottom: 1rem; color: #666;">${firstMarker.groupDescription}</p>` : ''}
+                    
+                    <p style="font-weight: 600; margin-bottom: 1rem;">
+                        ${groupMarkers.length} Punkte in diesem Tourpaket
+                    </p>
+                </div>
+                
+                <div style="margin-top: 1.5rem;">
+                    <h3 style="color: var(--primary-green); margin-bottom: 1rem;">📍 Alle Punkte</h3>
+                    ${groupMarkers.map((m, idx) => {
+                        const mType = markerTypes[m.type];
+                        return `
+                            <div onclick="showMarkerDetails(${m.id})" style="background: var(--light-beige); padding: 1rem; margin-bottom: 0.8rem; border-radius: 5px; border-left: 3px solid ${mType.color}; cursor: pointer;">
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 600; margin-bottom: 0.3rem;">
+                                            ${idx + 1}. ${mType.icon} ${m.name}
+                                        </div>
+                                        <div style="font-size: 0.85rem; color: #666;">
+                                            ${mType.name}${m.difficulty ? ' • ' + getDifficultyLabel(m.difficulty) : ''}
+                                        </div>
+                                        ${m.description ? `<div style="font-size: 0.85rem; color: #888; margin-top: 0.3rem;">${m.description.substring(0, 60)}${m.description.length > 60 ? '...' : ''}</div>` : ''}
+                                    </div>
+                                    <span style="color: var(--accent-orange); font-size: 1.2rem; margin-left: 0.5rem;">→</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+
+            document.getElementById('markerDetailsContent').innerHTML = groupHTML;
+            document.getElementById('markerDetailsView').style.display = 'block';
+            document.getElementById('markerListSection').style.display = 'none';
+
+            // Zeige alle Punkte der Gruppe auf Karte
+            const allCoords = [];
+            groupMarkers.forEach(m => {
+                if (m.isRoute && m.points) {
+                    allCoords.push(...m.points);
+                } else {
+                    allCoords.push([m.lat, m.lng]);
+                }
+            });
+            
+            if (allCoords.length > 0) {
+                const bounds = L.latLngBounds(allCoords);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
         }
 
         function highlightTourpaket(groupId) {
@@ -3235,7 +3399,9 @@
         function updateAdminDashboard() {
             // Vorschläge aktualisieren
             const suggestionsList = document.getElementById('suggestionsList');
-            const pendingSuggestions = markerSuggestions.filter(s => s.status === 'pending');
+            const pendingSuggestions = markerSuggestions
+                .filter(s => s.status === 'pending')
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Neueste zuerst
             
             document.getElementById('suggestionCount').textContent = pendingSuggestions.length;
             
@@ -3376,9 +3542,19 @@
                 return;
             }
 
-            list.innerHTML = markers.map(m => {
+            // Sortiere nach Bestätigungsdatum (neueste zuerst)
+            const sortedMarkers = [...markers].sort((a, b) => {
+                const dateA = new Date(a.approvedAt || a.createdAt || 0);
+                const dateB = new Date(b.approvedAt || b.createdAt || 0);
+                return dateB - dateA;
+            });
+
+            list.innerHTML = sortedMarkers.map(m => {
                 const t = markerTypes[m.type];
                 const coordDisplay = m.isRoute ? `${m.points.length} Wegpunkte` : `📍 ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}`;
+                const approvalDate = m.approvedAt ? new Date(m.approvedAt).toLocaleString('de-DE', { 
+                    year: 'numeric', month: '2-digit', day: '2-digit' 
+                }) : '';
                 
                 return `
                     <div class="marker-item" style="cursor: default;">
@@ -3387,6 +3563,7 @@
                             <span class="marker-item-type">${t.icon}</span>
                         </div>
                         <div class="marker-item-coords">${coordDisplay}</div>
+                        ${approvalDate ? `<div style="font-size: 0.75rem; color: #999; margin-top: 0.3rem;">✓ ${approvalDate}</div>` : ''}
                         <button class="delete-marker-btn" onclick="deleteMarker(${m.id})" style="width: 100%; margin-top: 0.5rem;">🗑️ Löschen</button>
                     </div>
                 `;
@@ -3404,8 +3581,13 @@
                 type: suggestion.type,
                 difficulty: suggestion.difficulty,
                 description: suggestion.description,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                approvedAt: new Date().toISOString()
             };
+
+            if (suggestion.address) {
+                newMarker.address = suggestion.address;
+            }
 
             if (suggestion.isRoute) {
                 newMarker.isRoute = true;
@@ -3471,6 +3653,7 @@
             // Alle Elemente des Tourpakets als Marker hinzufügen
             const groupId = Date.now();
             const groupName = suggestion.name;
+            const groupDescription = suggestion.description || '';
 
             suggestion.items.forEach((item, index) => {
                 const newMarker = {
@@ -3481,8 +3664,14 @@
                     description: item.description,
                     groupId: groupId,
                     groupName: groupName,
-                    createdAt: new Date().toISOString()
+                    groupDescription: groupDescription,
+                    createdAt: new Date().toISOString(),
+                    approvedAt: new Date().toISOString()
                 };
+
+                if (item.address) {
+                    newMarker.address = item.address;
+                }
 
                 if (item.isRoute) {
                     newMarker.isRoute = true;
@@ -3854,6 +4043,7 @@
             const item = suggestion.items[itemIdx];
             const groupId = Date.now();
             const groupName = suggestion.name;
+            const groupDescription = suggestion.description || '';
 
             const newMarker = {
                 id: Date.now(),
@@ -3863,7 +4053,9 @@
                 description: item.description,
                 groupId: groupId,
                 groupName: groupName,
-                createdAt: new Date().toISOString()
+                groupDescription: groupDescription,
+                createdAt: new Date().toISOString(),
+                approvedAt: new Date().toISOString()
             };
 
             if (item.address) {
